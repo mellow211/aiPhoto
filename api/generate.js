@@ -39,85 +39,171 @@ export default async function handler(req, res) {
     ? `${stylePrompt}, ${prompt}`
     : stylePrompt;
 
-  const apiKey = process.env.STABILITY_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const stabilityKey = process.env.STABILITY_API_KEY;
 
   // -------------------------------------------------------------
-  // Mock Mode: Run if no API key is set in Vercel environment
+  // 1. Google Gemini API Mode (Imagen 3 + Gemini 1.5 Flash Pipeline)
   // -------------------------------------------------------------
-  if (!apiKey || apiKey === 'YOUR_STABILITY_API_KEY_HERE') {
-    console.log(`[VERCEL MOCK] Style: ${selectedStyle}, Custom prompt: ${prompt || 'None'}`);
-    
-    // Simulate 3 seconds generation delay
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    
-    const mockImageUrl = `/mock_${selectedStyle}.jpg`;
-    
-    return res.status(200).json({
-      success: true,
-      image: mockImageUrl,
-      isMock: true,
-      promptUsed: finalPrompt
-    });
-  }
+  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
+    try {
+      console.log(`[VERCEL GEMINI] Running 2-stage caricature pipeline. Style: ${selectedStyle}`);
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-  // -------------------------------------------------------------
-  // Real API Mode: Stability AI Image-to-Image
-  // -------------------------------------------------------------
-  try {
-    console.log(`[VERCEL REAL] Connecting to Stability AI. Style: ${selectedStyle}`);
-    
-    // Parse base64 init image
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-    const imageBuffer = Buffer.from(base64Data, 'base64');
+      // Stage 1: Analyze captured image using Gemini 1.5 Flash
+      const analyzeResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: 'Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Output ONLY the description in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.'
+                  },
+                  {
+                    inlineData: {
+                      mimeType: 'image/jpeg',
+                      data: base64Data
+                    }
+                  }
+                ]
+              }
+            ]
+          })
+        }
+      );
 
-    // Build form data for API request
-    const formData = new FormData();
-    formData.append('init_image', new Blob([imageBuffer], { type: 'image/jpeg' }), 'init_image.jpg');
-    formData.append('init_image_mode', 'IMAGE_STRENGTH');
-    formData.append('image_strength', '0.35'); // Retain layout, shift style
-    formData.append('text_prompts[0][text]', finalPrompt);
-    formData.append('text_prompts[0][weight]', '1.0');
-    
-    // Negative prompt
-    formData.append('text_prompts[1][text]', 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions');
-    formData.append('text_prompts[1][weight]', '-1.0');
-
-    formData.append('cfg_scale', '8');
-    formData.append('samples', '1');
-    formData.append('steps', '30');
-
-    const response = await fetch(
-      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Accept': 'application/json',
-        },
-        body: formData,
+      if (!analyzeResponse.ok) {
+        const errText = await analyzeResponse.text();
+        throw new Error(`Gemini face analysis failed: ${errText}`);
       }
-    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Stability AI API returned status ${response.status}: ${errorText}`);
+      const analyzeResult = await analyzeResponse.json();
+      const faceDescription = analyzeResult.candidates?.[0]?.content?.parts?.[0]?.text || 'A person';
+      console.log(`[VERCEL GEMINI] Face Analysis: ${faceDescription}`);
+
+      // Stage 2: Pass description to Imagen 3 to paint the caricature
+      const finalPromptForGemini = `${stylePrompt}, a caricature of: ${faceDescription}. ${prompt || ''}`;
+      console.log(`[VERCEL GEMINI] Sending prompt to Imagen 3: ${finalPromptForGemini}`);
+
+      const imagenResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: finalPromptForGemini,
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: '1:1'
+          })
+        }
+      );
+
+      if (!imagenResponse.ok) {
+        const errText = await imagenResponse.text();
+        throw new Error(`Gemini Imagen 3 failed: ${errText}`);
+      }
+
+      const imagenResult = await imagenResponse.json();
+      const imageBytes = imagenResult.generatedImages?.[0]?.image?.imageBytes;
+      if (!imageBytes) {
+        throw new Error('Imagen 3 returned no image data.');
+      }
+
+      return res.status(200).json({
+        success: true,
+        image: `data:image/jpeg;base64,${imageBytes}`,
+        isMock: false,
+        promptUsed: finalPromptForGemini
+      });
+
+    } catch (error) {
+      console.error('[VERCEL GEMINI ERROR]', error);
+      return res.status(500).json({ 
+        error: 'Gemini 이미지 생성 중 오류가 발생했습니다.', 
+        details: error.message 
+      });
     }
-
-    const result = await response.json();
-    const generatedBase64 = result.artifacts[0].base64;
-
-    return res.status(200).json({
-      success: true,
-      image: `data:image/jpeg;base64,${generatedBase64}`,
-      isMock: false,
-      promptUsed: finalPrompt
-    });
-
-  } catch (error) {
-    console.error('[VERCEL REAL ERROR]', error);
-    return res.status(500).json({ 
-      error: 'AI 이미지 생성 중 오류가 발생했습니다.', 
-      details: error.message 
-    });
   }
+
+  // -------------------------------------------------------------
+  // 2. Stability AI Mode (Stable Diffusion XL Image-to-Image)
+  // -------------------------------------------------------------
+  if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
+    try {
+      console.log(`[VERCEL REAL] Connecting to Stability AI. Style: ${selectedStyle}`);
+      
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+
+      const formData = new FormData();
+      formData.append('init_image', new Blob([imageBuffer], { type: 'image/jpeg' }), 'init_image.jpg');
+      formData.append('init_image_mode', 'IMAGE_STRENGTH');
+      formData.append('image_strength', '0.35');
+      formData.append('text_prompts[0][text]', finalPrompt);
+      formData.append('text_prompts[0][weight]', '1.0');
+      
+      formData.append('text_prompts[1][text]', 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions');
+      formData.append('text_prompts[1][weight]', '-1.0');
+
+      formData.append('cfg_scale', '8');
+      formData.append('samples', '1');
+      formData.append('steps', '30');
+
+      const response = await fetch(
+        'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${stabilityKey}`,
+            'Accept': 'application/json',
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Stability AI API returned status ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      const generatedBase64 = result.artifacts[0].base64;
+
+      return res.status(200).json({
+        success: true,
+        image: `data:image/jpeg;base64,${generatedBase64}`,
+        isMock: false,
+        promptUsed: finalPrompt
+      });
+
+    } catch (error) {
+      console.error('[VERCEL REAL ERROR]', error);
+      return res.status(500).json({ 
+        error: 'AI 이미지 생성 중 오류가 발생했습니다.', 
+        details: error.message 
+      });
+    }
+  }
+
+  // -------------------------------------------------------------
+  // 3. Mock Mode Fallback (Simulated AI Generation)
+  // -------------------------------------------------------------
+  console.log(`[VERCEL MOCK] Style: ${selectedStyle}, Custom prompt: ${prompt || 'None'}`);
+  
+  // Simulate 3 seconds generation delay
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  
+  const mockImageUrl = `/mock_${selectedStyle}.jpg`;
+  
+  return res.status(200).json({
+    success: true,
+    image: mockImageUrl,
+    isMock: true,
+    promptUsed: finalPrompt
+  });
 }
