@@ -733,3 +733,182 @@ body {
     margin: 0mm;
   }
 }
+
+/* -------------------------------------------------------------
+   Responsive Mobile & Portrait Layout Support
+   ------------------------------------------------------------- */
+@media (max-width: 850px) or (max-aspect-ratio: 1.1/1) {
+  /* Allow the main container and content wrapper to scroll vertically */
+  .app-container {
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+  }
+  
+  .app-content {
+    padding: 16px 20px !important;
+    align-items: flex-start !important; /* Allow natural top-to-bottom layout alignment */
+    overflow-y: visible !important;
+  }
+
+  .app-header {
+    height: 60px !important;
+    padding: 0 20px !important;
+  }
+
+  .logo-text {
+    font-size: 1.1rem !important;
+  }
+
+  .logo-icon {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 0.9rem !important;
+  }
+
+  .header-tag {
+    font-size: 0.75rem !important;
+    padding: 4px 10px !important;
+  }
+
+  /* Expand the glass card to stack children vertically */
+  .glass-card {
+    max-width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    padding: 24px 20px !important;
+    border-radius: 16px !important;
+    margin: 10px 0 30px 0 !important;
+  }
+
+  /* Welcome Screen Tweak */
+  .welcome-title {
+    font-size: 2.2rem !important;
+  }
+  .welcome-subtitle {
+    font-size: 1rem !important;
+  }
+  .start-btn {
+    padding: 14px 36px !important;
+    font-size: 1.1rem !important;
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Camera Screen Tweak: stack viewfinder on top, controls below */
+  .camera-layout {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  
+  .camera-preview-container {
+    height: 280px !important; /* Smaller size for portrait orientation */
+  }
+
+  .face-guide-oval {
+    width: 150px !important;
+    height: 200px !important;
+  }
+
+  .camera-instruction {
+    font-size: 1.25rem !important;
+  }
+  .camera-sub-instruction {
+    font-size: 0.85rem !important;
+  }
+
+  /* Style Screen Tweak: stack captured image and options */
+  .style-layout {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+
+  .style-photo-preview {
+    height: 220px !important; /* Smaller space saving preview */
+  }
+
+  .style-options-panel {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .style-grid-container {
+    overflow-y: visible !important;
+    height: auto !important;
+  }
+
+  .style-grid {
+    grid-template-columns: 1fr !important; /* Stack styles in 1 column on narrow screens */
+  }
+
+  @media (min-width: 480px) {
+    .style-grid {
+      grid-template-columns: repeat(2, 1fr) !important; /* Dual column for portrait tablets */
+    }
+  }
+
+  .prompt-textarea {
+    height: 60px !important;
+  }
+
+  /* Result Screen Tweak: stack image card and info */
+  .result-layout {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+
+  .result-image-card {
+    height: 280px !important;
+  }
+
+  .result-title {
+    font-size: 1.5rem !important;
+  }
+  .result-description {
+    font-size: 0.85rem !important;
+  }
+}
+
+/* Landscape Mobile Viewports (Very short viewports) */
+@media (max-height: 600px) {
+  .app-container {
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+  }
+
+  .app-content {
+    align-items: flex-start !important;
+    padding: 12px 16px !important;
+  }
+
+  .app-header {
+    height: 50px !important;
+    padding: 0 16px !important;
+  }
+
+  .glass-card {
+    max-height: none !important;
+    height: auto !important;
+    padding: 20px !important;
+    margin: 10px 0 20px 0 !important;
+  }
+
+  /* Make photos smaller to fit landscape mobile screens */
+  .camera-preview-container {
+    height: 200px !important;
+  }
+
+  .style-photo-preview {
+    height: 180px !important;
+  }
+
+  .result-image-card {
+    height: 200px !important;
+  }
+
+  .style-grid-container {
+    max-height: 180px !important;
+    overflow-y: auto !important;
+  }
+}
