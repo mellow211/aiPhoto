@@ -107,27 +107,35 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
-      {/* Kiosk App Header */}
-      <header className="app-header">
-        <div className="logo-section">
-          <div className="logo-icon">🎨</div>
-          <span className="logo-text">AI Caricature Booth</span>
-        </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {error && (
-            <span style={{ color: '#ff2a85', fontSize: '0.85rem', fontWeight: 600, background: 'rgba(255,42,133,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
-              ⚠️ {error}
-            </span>
-          )}
-          <span className="header-tag">EVENT ZONE</span>
-        </div>
-      </header>
+    <>
+      <div className="app-container">
+        {/* Kiosk App Header */}
+        <header className="app-header">
+          <div className="logo-section">
+            <div className="logo-icon">🎨</div>
+            <span className="logo-text">AI Caricature Booth</span>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {error && (
+              <span style={{ color: '#ff2a85', fontSize: '0.85rem', fontWeight: 600, background: 'rgba(255,42,133,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
+                ⚠️ {error}
+              </span>
+            )}
+            <span className="header-tag">EVENT ZONE</span>
+          </div>
+        </header>
 
-      {/* Screen Mount Area */}
-      <main className="app-content">
-        {renderScreen()}
-      </main>
-    </div>
+        {/* Screen Mount Area */}
+        <main className="app-content">
+          {renderScreen()}
+        </main>
+      </div>
+
+      {generatedCaricature && (
+        <div id="print-target">
+          <img src={generatedCaricature} alt="Caricature for Print" />
+        </div>
+      )}
+    </>
   );
 }

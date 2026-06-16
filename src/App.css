@@ -666,28 +666,25 @@ body {
    CSS Print Media Rules
    ------------------------------------------------------------- */
 @media print {
-  /* Hide all elements in the body */
-  body * {
-    visibility: hidden;
+  /* Completely hide the main React app wrapper to clear page flow */
+  .app-container {
+    display: none !important;
   }
   
-  /* Selectively show only the generated caricature print container */
-  #print-target, #print-target * {
-    visibility: visible;
-  }
-  
+  /* Render only the print container full-page starting at (0,0) */
   #print-target {
-    position: absolute;
+    display: flex !important;
+    position: fixed;
     left: 0;
     top: 0;
     width: 100vw;
     height: 100vh;
-    display: flex !important;
     justify-content: center;
     align-items: center;
     background-color: white;
     margin: 0;
     padding: 0;
+    z-index: 9999;
   }
   
   #print-target img {
@@ -697,7 +694,7 @@ body {
     page-break-inside: avoid;
   }
   
-  /* Reset page margin to cover whole sheet */
+  /* Reset margins for clean edge-to-edge printing */
   @page {
     size: auto;
     margin: 0mm;
