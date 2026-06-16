@@ -117,9 +117,10 @@ export default function CameraScreen({ onCapture, onBack }) {
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       <input 
         ref={fileInputRef} 
+        id="camera-file-input"
         type="file" 
         accept="image/*" 
-        style={{ display: 'none' }} 
+        style={{ opacity: 0, position: 'absolute', width: '1px', height: '1px', zIndex: -1 }} 
         onChange={handleFileUpload} 
       />
 

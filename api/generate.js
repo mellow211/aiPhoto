@@ -39,11 +39,113 @@ export default async function handler(req, res) {
     ? `${stylePrompt}, ${prompt}`
     : stylePrompt;
 
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
   const geminiKey = process.env.GEMINI_API_KEY;
   const stabilityKey = process.env.STABILITY_API_KEY;
 
   // -------------------------------------------------------------
-  // 1. Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
+  // 1. Replicate API Mode (Stable Diffusion XL Image-to-Image)
+  // -------------------------------------------------------------
+  if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
+    try {
+      console.log(`[VERCEL REPLICATE] Running image-to-image caricature pipeline. Style: ${selectedStyle}`);
+      
+      const response = await fetch('https://api.replicate.com/v1/predictions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${replicateToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+          input: {
+            image: image,
+            prompt: finalPrompt,
+            prompt_strength: 0.65,
+            negative_prompt: 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions',
+            guidance_scale: 7.5,
+            num_inference_steps: 30,
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Replicate API returned status ${response.status}: ${errText}`);
+      }
+
+      const prediction = await response.json();
+      const predictionId = prediction.id;
+      let status = prediction.status;
+      let output = null;
+
+      console.log(`[VERCEL REPLICATE] Prediction created with ID: ${predictionId}. Status: ${status}`);
+
+      let attempts = 0;
+      const maxAttempts = 40; // 최대 60초 대기
+
+      while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled' && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        attempts++;
+
+        const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+          headers: {
+            'Authorization': `Bearer ${replicateToken}`,
+          }
+        });
+
+        if (!pollResponse.ok) {
+          const errText = await pollResponse.text();
+          throw new Error(`Replicate poll failed: ${errText}`);
+        }
+
+        const pollData = await pollResponse.json();
+        status = pollData.status;
+        output = pollData.output;
+        console.log(`[VERCEL REPLICATE] Polling... Attempt ${attempts}. Status: ${status}`);
+
+        if (status === 'failed' || status === 'canceled') {
+          throw new Error(`Replicate prediction ended with status: ${status}. Error: ${pollData.error || 'Unknown error'}`);
+        }
+      }
+
+      if (status !== 'succeeded') {
+        throw new Error('Replicate prediction timed out.');
+      }
+
+      const resultImageUrl = Array.isArray(output) ? output[0] : output;
+      if (!resultImageUrl) {
+        throw new Error('Replicate did not return any output image URL.');
+      }
+
+      console.log(`[VERCEL REPLICATE] Generation succeeded. Downloading image from ${resultImageUrl}...`);
+
+      const imageResponse = await fetch(resultImageUrl);
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to download generated image from Replicate: ${imageResponse.statusText}`);
+      }
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64Image = buffer.toString('base64');
+
+      return res.status(200).json({
+        success: true,
+        image: `data:image/jpeg;base64,${base64Image}`,
+        isMock: false,
+        promptUsed: finalPrompt
+      });
+
+    } catch (error) {
+      console.error('[VERCEL REPLICATE ERROR]', error);
+      return res.status(500).json({ 
+        error: 'Replicate 이미지 생성 중 오류가 발생했습니다.', 
+        details: error.message 
+      });
+    }
+  }
+
+  // -------------------------------------------------------------
+  // 2. Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
   // -------------------------------------------------------------
   if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
     try {
