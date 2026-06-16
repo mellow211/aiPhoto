@@ -679,11 +679,10 @@ body {
     background-color: white !important;
   }
 
-  /* Make the root container fill the page height using viewport units */
+  /* Make the root container fill the page height using percentages instead of screen viewport units */
   #root {
     width: 100% !important;
-    height: 100vh !important;
-    height: 100dvh !important;
+    height: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
@@ -711,6 +710,9 @@ body {
     align-items: center !important;
     background-color: white !important;
     margin: 0 !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
   }
   
   #print-target img {
