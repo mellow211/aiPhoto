@@ -43,16 +43,16 @@ export default async function handler(req, res) {
   const stabilityKey = process.env.STABILITY_API_KEY;
 
   // -------------------------------------------------------------
-  // 1. Google Gemini API Mode (Imagen 3 + Gemini 1.5 Flash Pipeline)
+  // 1. Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
   // -------------------------------------------------------------
   if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
     try {
       console.log(`[VERCEL GEMINI] Running 2-stage caricature pipeline. Style: ${selectedStyle}`);
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-      // Stage 1: Analyze captured image using Gemini 1.5 Flash
+      // Stage 1: Analyze captured image using Gemini 2.5 Flash
       const analyzeResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -85,33 +85,38 @@ export default async function handler(req, res) {
       const faceDescription = analyzeResult.candidates?.[0]?.content?.parts?.[0]?.text || 'A person';
       console.log(`[VERCEL GEMINI] Face Analysis: ${faceDescription}`);
 
-      // Stage 2: Pass description to Imagen 3 to paint the caricature
+      // Stage 2: Pass description to Imagen 4 to paint the caricature
       const finalPromptForGemini = `${stylePrompt}, a caricature of: ${faceDescription}. ${prompt || ''}`;
-      console.log(`[VERCEL GEMINI] Sending prompt to Imagen 3: ${finalPromptForGemini}`);
+      console.log(`[VERCEL GEMINI] Sending prompt to Imagen 4: ${finalPromptForGemini}`);
 
       const imagenResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            prompt: finalPromptForGemini,
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: '1:1'
+            instances: [
+              {
+                prompt: finalPromptForGemini
+              }
+            ],
+            parameters: {
+              sampleCount: 1,
+              aspectRatio: '1:1'
+            }
           })
         }
       );
 
       if (!imagenResponse.ok) {
-        const errText = await imagenResponse.text();
-        throw new Error(`Gemini Imagen 3 failed: ${errText}`);
+        const errText = await imagenResponse.ok ? '' : await imagenResponse.text();
+        throw new Error(`Gemini Imagen 4 failed: ${errText}`);
       }
 
       const imagenResult = await imagenResponse.json();
-      const imageBytes = imagenResult.generatedImages?.[0]?.image?.imageBytes;
+      const imageBytes = imagenResult.predictions?.[0]?.bytesBase64Encoded;
       if (!imageBytes) {
-        throw new Error('Imagen 3 returned no image data.');
+        throw new Error('Imagen 4 returned no image data.');
       }
 
       return res.status(200).json({
