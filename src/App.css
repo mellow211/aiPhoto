@@ -657,6 +657,11 @@ body {
   100% { transform: translate(-50%, -50%) rotate(25deg); }
 }
 
+/* Hide print target by default on screen */
+#print-target {
+  display: none;
+}
+
 /* -------------------------------------------------------------
    CSS Print Media Rules
    ------------------------------------------------------------- */
@@ -677,7 +682,7 @@ body {
     top: 0;
     width: 100vw;
     height: 100vh;
-    display: flex;
+    display: flex !important;
     justify-content: center;
     align-items: center;
     background-color: white;

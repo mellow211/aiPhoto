@@ -30,7 +30,7 @@ export default function ResultScreen({ imageUrl, selectedStyle, customPrompt, on
   return (
     <div className="glass-card result-layout">
       {/* Print-only Container (Invisible normally, visible during printing) */}
-      <div id="print-target" style={{ display: 'none' }}>
+      <div id="print-target">
         <img src={imageUrl} alt="Caricature for Print" />
       </div>
 
