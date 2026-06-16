@@ -668,7 +668,7 @@ body {
    CSS Print Media Rules
    ------------------------------------------------------------- */
 @media print {
-  /* Reset HTML and Body layout completely for print */
+  /* Reset HTML, Body layout completely for print */
   html, body {
     width: 100% !important;
     height: 100% !important;
@@ -677,7 +677,22 @@ body {
     overflow: hidden !important;
     background: none !important;
     background-color: white !important;
-    display: block !important; /* Overrides screen body flex layout */
+  }
+
+  /* Make the root container fill the page height using viewport units */
+  #root {
+    width: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: none !important;
+    background-color: white !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
   }
 
   /* Completely hide the main React app wrapper to clear page flow */
@@ -685,7 +700,7 @@ body {
     display: none !important;
   }
   
-  /* Render print container as normal flow block filling the body */
+  /* Render print container as flex box filling the root container */
   #print-target {
     display: flex !important;
     width: 100% !important;

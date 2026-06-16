@@ -29,11 +29,6 @@ export default function ResultScreen({ imageUrl, selectedStyle, customPrompt, on
 
   return (
     <div className="glass-card result-layout">
-      {/* Print-only Container (Invisible normally, visible during printing) */}
-      <div id="print-target">
-        <img src={imageUrl} alt="Caricature for Print" />
-      </div>
-
       {/* Left side: Rendered Caricature */}
       <div className="result-image-card">
         <img src={imageUrl} alt="Generated Caricature" className="result-image" />
