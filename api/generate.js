@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   // -------------------------------------------------------------
   // 1. Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
   // -------------------------------------------------------------
-  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
+  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
     try {
       console.log(`[VERCEL GEMINI] Running 2-stage caricature pipeline. Style: ${selectedStyle}`);
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');

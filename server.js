@@ -62,7 +62,7 @@ app.post('/api/generate', async (req, res) => {
   // -------------------------------------------------------------
   // 1. Google Gemini API Mode (Imagen 3 + Gemini 1.5 Flash Pipeline)
   // -------------------------------------------------------------
-  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
+  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
     try {
       console.log(`[GEMINI AI] Running 2-stage caricature pipeline. Style: ${selectedStyle}`);
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
