@@ -672,6 +672,7 @@ body {
   html, body {
     width: 100% !important;
     height: 100% !important;
+    min-height: 0 !important; /* Override screen body min-height: 100vh leaking */
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
@@ -684,6 +685,7 @@ body {
   #root {
     width: 100% !important;
     height: 95% !important;
+    min-height: 0 !important; /* Disable any min-height inherits */
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
