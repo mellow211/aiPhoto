@@ -668,7 +668,7 @@ body {
    CSS Print Media Rules
    ------------------------------------------------------------- */
 @media print {
-  /* Reset HTML, Body layout completely for print */
+  /* Reset HTML, Body layout completely for print, overriding flex layouts */
   html, body {
     width: 100% !important;
     height: 100% !important;
@@ -677,12 +677,13 @@ body {
     overflow: hidden !important;
     background: none !important;
     background-color: white !important;
+    display: block !important; /* Overrides screen body flex layout to prevent pagination bugs */
   }
 
-  /* Make the root container fill the page height using percentages instead of screen viewport units */
+  /* Make the root container fill the page height, utilizing 99% to avoid sub-pixel pagination overflows */
   #root {
     width: 100% !important;
-    height: 100% !important;
+    height: 99% !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
