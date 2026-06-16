@@ -666,35 +666,43 @@ body {
    CSS Print Media Rules
    ------------------------------------------------------------- */
 @media print {
+  /* Reset HTML and Body layout completely for print */
+  html, body {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: none !important;
+    background-color: white !important;
+    display: block !important; /* Overrides screen body flex layout */
+  }
+
   /* Completely hide the main React app wrapper to clear page flow */
   .app-container {
     display: none !important;
   }
   
-  /* Render only the print container full-page starting at (0,0) */
+  /* Render print container as normal flow block filling the body */
   #print-target {
     display: flex !important;
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
-    padding: 10mm; /* Printer margin safety zone */
-    justify-content: center;
-    align-items: center;
-    background-color: white;
-    margin: 0;
-    z-index: 9999;
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    padding: 15mm !important; /* Safety padding inside printable page bounds */
+    justify-content: center !important;
+    align-items: center !important;
+    background-color: white !important;
+    margin: 0 !important;
   }
   
   #print-target img {
-    max-width: 100%;
-    max-height: 100%;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    page-break-inside: avoid;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    page-break-inside: avoid !important;
   }
   
   /* Reset default system margins */
