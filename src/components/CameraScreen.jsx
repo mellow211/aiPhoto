@@ -180,19 +180,19 @@ export default function CameraScreen({ onCapture, onBack }) {
           </p>
         </div>
 
-        <div className="camera-actions" style={{ flexWrap: 'wrap', gap: '10px' }}>
+        <div className="camera-actions" style={{ flexWrap: 'wrap', gap: '12px' }}>
           {capturedImage ? (
-            <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
-              <button className="btn btn-secondary" onClick={handleRetake}>
+            <div style={{ display: 'flex', width: '100%', gap: '12px' }}>
+              <button className="btn btn-secondary" onClick={handleRetake} style={{ flex: 1 }}>
                 <span>다시 선택</span>
               </button>
-              <button className="btn btn-primary" onClick={handleConfirm}>
+              <button className="btn btn-primary" onClick={handleConfirm} style={{ flex: 1.5 }}>
                 <span>사용하기</span>
               </button>
             </div>
           ) : error ? (
             /* Layout for Camera Error state */
-            <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
+            <div style={{ display: 'flex', width: '100%', gap: '12px' }}>
               <button className="btn btn-secondary" onClick={onBack} style={{ flex: '0.4' }}>
                 <span>이전으로</span>
               </button>
@@ -206,20 +206,25 @@ export default function CameraScreen({ onCapture, onBack }) {
               </button>
             </div>
           ) : (
-            /* Layout for Normal Camera State (Stacked 2x2 grid for tablet ergonomics) */
-            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '10px' }}>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="btn btn-secondary" onClick={onBack} style={{ flex: 1 }}>
-                  <span>이전으로</span>
-                </button>
+            /* Layout for Normal Camera State (Hierarchical vertical stack for ergonomics) */
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '12px' }}>
+              {/* Row 1: Primary Action */}
+              <button className="btn btn-primary" onClick={handleCapture} style={{ padding: '16px 24px', fontSize: '1.1rem' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                <span>사진 촬영</span>
+              </button>
+
+              {/* Row 2: Camera Utilities */}
+              <div style={{ display: 'flex', gap: '12px' }}>
                 <button className="btn btn-secondary" onClick={toggleFacingMode} style={{ flex: 1 }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
                   </svg>
                   <span>카메라 전환</span>
                 </button>
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ flex: 1 }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -228,14 +233,12 @@ export default function CameraScreen({ onCapture, onBack }) {
                   </svg>
                   <span>사진 업로드</span>
                 </button>
-                <button className="btn btn-primary" onClick={handleCapture} style={{ flex: 1.2 }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                    <circle cx="12" cy="13" r="4"></circle>
-                  </svg>
-                  <span>사진 촬영</span>
-                </button>
               </div>
+
+              {/* Row 3: Back Button */}
+              <button className="btn btn-secondary" onClick={onBack} style={{ padding: '12px 24px' }}>
+                <span>이전으로</span>
+              </button>
             </div>
           )}
         </div>
