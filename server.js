@@ -293,7 +293,14 @@ app.post('/api/generate', async (req, res) => {
     try {
       console.log(`[REPLICATE AI] Stage 1: Running gpt-4o (Image-to-Text). Style: ${selectedStyle}, Gender: ${selectedGender}`);
 
-      const visionPrompt = `Describe the subject in this image. Focus on physical characteristics such as hair style/color, expression, clothing, and gender (${selectedGender}). Keep the description to a single short paragraph, optimized as an image prompt. Do not write any introduction or formatting tags.`;
+      const visionPrompt = `You are a character artist. Describe the subject in this image in extreme detail for a portrait painting, focusing on physical likeness. Describe:
+1. Face shape and jawline (e.g., round, oval, sharp, square).
+2. Eye shape (e.g., almond, narrow, round), eyebrow shape/thickness, and eye expression.
+3. Nose shape (e.g., straight, prominent, small) and nose bridge.
+4. Mouth shape, lip fullness, and natural expression.
+5. Hair style, color, texture, and length.
+6. Key distinguishing features (e.g., glasses type/color, facial hair, distinct structure).
+Keep the description to a single, dense, highly descriptive paragraph. Do not describe the background. Output ONLY the description.`;
 
       let faceDescription = '';
       try {
@@ -317,7 +324,14 @@ app.post('/api/generate', async (req, res) => {
       } catch (gptError) {
         console.warn(`[REPLICATE AI] gpt-4o failed or refused. Falling back to LLaVA. Error:`, gptError.message);
         
-        const llavaPrompt = `Describe the person in this image. Write their hair style/color, expression, clothing, and gender. Keep the description to a single paragraph. Do not describe the background.`;
+        const llavaPrompt = `Describe the person in this image in detail. Describe:
+1. Face shape and jawline.
+2. Eye shape, eyebrows, and expression.
+3. Nose shape.
+4. Mouth and lips.
+5. Hair style and color.
+6. Distinguishing features like glasses or facial hair.
+Keep the description to a single paragraph. Do not describe the background.`;
         const llavaPrediction = await createPredictionWithRetry(
           '80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
           { image: image, prompt: llavaPrompt },
@@ -332,7 +346,7 @@ app.post('/api/generate', async (req, res) => {
       // 2. Call gpt-image-2 to generate the caricature
       console.log(`[REPLICATE AI] Stage 2: Running gpt-image-2 (Text-to-Image).`);
       
-      const finalPromptForGPT = `${stylePrompt}, a caricature of the person in the input image: ${faceDescription}. ${translatedPrompt || ''}`;
+      const finalPromptForGPT = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
       console.log(`[REPLICATE AI] Sending prompt to gpt-image-2: "${finalPromptForGPT}"`);
 
       // 2. Call gpt-image-2 using retry wrapper
@@ -340,8 +354,7 @@ app.post('/api/generate', async (req, res) => {
         'openai/gpt-image-2',
         {
           prompt: finalPromptForGPT,
-          aspect_ratio: '1:1',
-          input_images: [image]
+          aspect_ratio: '1:1'
         },
         replicateToken
       );
