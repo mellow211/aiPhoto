@@ -78,9 +78,17 @@ async function pollReplicatePrediction(predictionId, replicateToken) {
 }
 
 // Rate limit retry wrapper for creating Replicate predictions
-async function createPredictionWithRetry(version, input, replicateToken) {
+async function createPredictionWithRetry(identifier, input, replicateToken) {
   let attempts = 0;
   const maxAttempts = 5;
+
+  const body = {};
+  if (identifier.includes('/')) {
+    body.model = identifier;
+  } else {
+    body.version = identifier;
+  }
+  body.input = input;
 
   while (attempts < maxAttempts) {
     attempts++;
@@ -90,7 +98,7 @@ async function createPredictionWithRetry(version, input, replicateToken) {
         'Authorization': `Bearer ${replicateToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ version, input })
+      body: JSON.stringify(body)
     });
 
     if (response.status === 429) {
@@ -261,52 +269,48 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // 2. Replicate API Mode (LLaVA Image-to-Text + SDXL Text-to-Image)
+  // 2. Replicate API Mode (GPT-4o Vision + GPT Image 2 Pipeline)
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      console.log(`[VERCEL REPLICATE] Stage 1: Running LLaVA (Image-to-Text). Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[VERCEL REPLICATE] Stage 1: Running gpt-4o (Image-to-Text). Style: ${selectedStyle}, Gender: ${selectedGender}`);
 
-      const llavaPrompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
+      const visionPrompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
 
-      // 1. Call LLaVA to describe the image using retry wrapper
-      const llavaPrediction = await createPredictionWithRetry(
-        '80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
-        { image: image, prompt: llavaPrompt },
+      // 1. Call gpt-4o to describe the image using retry wrapper
+      const gptPrediction = await createPredictionWithRetry(
+        'openai/gpt-4o',
+        { prompt: visionPrompt, image_input: [image] },
         replicateToken
       );
-      console.log(`[VERCEL REPLICATE] LLaVA prediction created with ID: ${llavaPrediction.id}. Polling...`);
+      console.log(`[VERCEL REPLICATE] gpt-4o prediction created with ID: ${gptPrediction.id}. Polling...`);
       
-      const llavaOutput = await pollReplicatePrediction(llavaPrediction.id, replicateToken);
-      const faceDescription = Array.isArray(llavaOutput) ? llavaOutput.join('') : llavaOutput;
-      console.log(`[VERCEL REPLICATE] LLaVA Face Analysis description: "${faceDescription}"`);
+      const gptOutput = await pollReplicatePrediction(gptPrediction.id, replicateToken);
+      const faceDescription = Array.isArray(gptOutput) ? gptOutput.join('') : gptOutput;
+      console.log(`[VERCEL REPLICATE] gpt-4o Face Analysis description: "${faceDescription}"`);
 
-      // 2. Call SDXL to generate the caricature
-      console.log(`[VERCEL REPLICATE] Stage 2: Running SDXL (Text-to-Image).`);
+      // 2. Call gpt-image-2 to generate the caricature
+      console.log(`[VERCEL REPLICATE] Stage 2: Running gpt-image-2 (Text-to-Image).`);
       
-      const finalPromptForSDXL = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-      console.log(`[VERCEL REPLICATE] Sending prompt to SDXL: "${finalPromptForSDXL}"`);
+      const finalPromptForGPT = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      console.log(`[VERCEL REPLICATE] Sending prompt to gpt-image-2: "${finalPromptForGPT}"`);
 
-      // 2. Call SDXL using retry wrapper
-      const sdxlPrediction = await createPredictionWithRetry(
-        '7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
+      // 2. Call gpt-image-2 using retry wrapper
+      const imagePrediction = await createPredictionWithRetry(
+        'openai/gpt-image-2',
         {
-          prompt: finalPromptForSDXL,
-          negative_prompt: 'blurry, low quality, photorealistic, realistic, photograph, photo, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, ugly, distorted, deformed, group, 2girls, 2boys, multiple views, multi-panel, collage, split screen',
-          width: 1024,
-          height: 1024,
-          num_inference_steps: 30,
-          guidance_scale: 7.5
+          prompt: finalPromptForGPT,
+          aspect_ratio: '1:1'
         },
         replicateToken
       );
-      console.log(`[VERCEL REPLICATE] SDXL prediction created with ID: ${sdxlPrediction.id}. Polling...`);
+      console.log(`[VERCEL REPLICATE] gpt-image-2 prediction created with ID: ${imagePrediction.id}. Polling...`);
 
-      const sdxlOutput = await pollReplicatePrediction(sdxlPrediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(sdxlOutput) ? sdxlOutput[0] : sdxlOutput;
+      const imageOutput = await pollReplicatePrediction(imagePrediction.id, replicateToken);
+      const resultImageUrl = Array.isArray(imageOutput) ? imageOutput[0] : imageOutput;
 
       if (!resultImageUrl) {
-        throw new Error('Replicate SDXL did not return any output image URL.');
+        throw new Error('Replicate gpt-image-2 did not return any output image URL.');
       }
 
       console.log(`[VERCEL REPLICATE] Generation succeeded. Downloading image from ${resultImageUrl}...`);
@@ -323,7 +327,7 @@ export default async function handler(req, res) {
         success: true,
         image: `data:image/jpeg;base64,${base64Image}`,
         isMock: false,
-        promptUsed: finalPromptForSDXL
+        promptUsed: finalPromptForGPT
       });
 
     } catch (error) {
