@@ -287,84 +287,27 @@ app.post('/api/generate', async (req, res) => {
   }
 
   // -------------------------------------------------------------
-  // 2. Replicate API Mode (GPT-4o Vision + GPT Image 2 Pipeline)
+  // 2. Replicate API Mode (flux-kontext-apps/cartoonify)
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      console.log(`[REPLICATE AI] Stage 1: Running gpt-4o (Image-to-Text). Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[REPLICATE AI] Running flux-kontext-apps/cartoonify (Image-to-Image)`);
 
-      const visionPrompt = `You are a character artist. Describe the subject in this image in extreme detail for a portrait painting, focusing on physical likeness. Describe:
-1. Face shape and jawline (e.g., round, oval, sharp, square).
-2. Eye shape (e.g., almond, narrow, round), eyebrow shape/thickness, and eye expression.
-3. Nose shape (e.g., straight, prominent, small) and nose bridge.
-4. Mouth shape, lip fullness, and natural expression.
-5. Hair style, color, texture, and length.
-6. Key distinguishing features (e.g., glasses type/color, facial hair, distinct structure).
-Keep the description to a single, dense, highly descriptive paragraph. Do not describe the background. Output ONLY the description.`;
-
-      let faceDescription = '';
-      try {
-        // 1. Call gpt-4o to describe the image using retry wrapper
-        const gptPrediction = await createPredictionWithRetry(
-          'openai/gpt-4o',
-          { prompt: visionPrompt, image_input: [image] },
-          replicateToken
-        );
-        console.log(`[REPLICATE AI] gpt-4o prediction created with ID: ${gptPrediction.id}. Polling...`);
-        
-        const gptOutput = await pollReplicatePrediction(gptPrediction.id, replicateToken);
-        const description = Array.isArray(gptOutput) ? gptOutput.join('') : gptOutput;
-        
-        // Check if gpt-4o refused
-        if (description && (description.toLowerCase().includes("sorry") || description.toLowerCase().includes("can't help") || description.toLowerCase().includes("cannot help") || description.toLowerCase().includes("policies") || description.length < 15)) {
-          throw new Error("gpt-4o safety refusal triggered.");
-        }
-        faceDescription = description;
-        console.log(`[REPLICATE AI] gpt-4o Face Analysis description: "${faceDescription}"`);
-      } catch (gptError) {
-        console.warn(`[REPLICATE AI] gpt-4o failed or refused. Falling back to LLaVA. Error:`, gptError.message);
-        
-        const llavaPrompt = `Describe the person in this image in detail. Describe:
-1. Face shape and jawline.
-2. Eye shape, eyebrows, and expression.
-3. Nose shape.
-4. Mouth and lips.
-5. Hair style and color.
-6. Distinguishing features like glasses or facial hair.
-Keep the description to a single paragraph. Do not describe the background.`;
-        const llavaPrediction = await createPredictionWithRetry(
-          '80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
-          { image: image, prompt: llavaPrompt },
-          replicateToken
-        );
-        console.log(`[REPLICATE AI] Fallback LLaVA prediction created with ID: ${llavaPrediction.id}. Polling...`);
-        const llavaOutput = await pollReplicatePrediction(llavaPrediction.id, replicateToken);
-        faceDescription = Array.isArray(llavaOutput) ? llavaOutput.join('') : llavaOutput;
-        console.log(`[REPLICATE AI] Fallback LLaVA Face Analysis description: "${faceDescription}"`);
-      }
-
-      // 2. Call gpt-image-2 to generate the caricature
-      console.log(`[REPLICATE AI] Stage 2: Running gpt-image-2 (Text-to-Image).`);
-      
-      const finalPromptForGPT = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-      console.log(`[REPLICATE AI] Sending prompt to gpt-image-2: "${finalPromptForGPT}"`);
-
-      // 2. Call gpt-image-2 using retry wrapper
-      const imagePrediction = await createPredictionWithRetry(
-        'openai/gpt-image-2',
+      const prediction = await createPredictionWithRetry(
+        'flux-kontext-apps/cartoonify',
         {
-          prompt: finalPromptForGPT,
-          aspect_ratio: '1:1'
+          input_image: image,
+          aspect_ratio: 'match_input_image'
         },
         replicateToken
       );
-      console.log(`[REPLICATE AI] gpt-image-2 prediction created with ID: ${imagePrediction.id}. Polling...`);
+      console.log(`[REPLICATE AI] Prediction created with ID: ${prediction.id}. Polling...`);
 
-      const imageOutput = await pollReplicatePrediction(imagePrediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(imageOutput) ? imageOutput[0] : imageOutput;
+      const output = await pollReplicatePrediction(prediction.id, replicateToken);
+      const resultImageUrl = Array.isArray(output) ? output[0] : output;
 
       if (!resultImageUrl) {
-        throw new Error('Replicate gpt-image-2 did not return any output image URL.');
+        throw new Error('Replicate cartoonify did not return any output image URL.');
       }
 
       console.log(`[REPLICATE AI] Generation succeeded. Downloading image from ${resultImageUrl}...`);
@@ -381,7 +324,7 @@ Keep the description to a single paragraph. Do not describe the background.`;
         success: true,
         image: `data:image/jpeg;base64,${base64Image}`,
         isMock: false,
-        promptUsed: finalPromptForGPT
+        promptUsed: 'flux-kontext-apps/cartoonify (Image-to-Image)'
       });
 
     } catch (error) {
