@@ -48,17 +48,17 @@ export default async function handler(req, res) {
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      console.log(`[VERCEL REPLICATE] Running face-to-many caricature pipeline. Style: ${selectedStyle}`);
+      console.log(`[VERCEL REPLICATE] Running zsxkib/instant-id caricature pipeline. Style: ${selectedStyle}`);
       
-      const replicateStyles = {
-        watercolor: 'Clay',
-        comic: 'Video game',
-        hero: 'Video game',
-        pixel: 'Pixels',
-        disney: '3D',
-        sketch: 'Clay'
+      const baseModelWeights = {
+        watercolor: 'dreamshaper-xl',
+        comic: 'animagine-xl-30',
+        hero: 'animagine-xl-30',
+        pixel: 'dreamshaper-xl',
+        disney: 'dynavision-xl-v0610',
+        sketch: 'dreamshaper-xl'
       };
-      const replicateStyle = replicateStyles[selectedStyle] || '3D';
+      const selectedWeights = baseModelWeights[selectedStyle] || 'stable-diffusion-xl-base-1.0';
 
       const response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
@@ -67,15 +67,15 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          version: 'a07f252abbbd832009640b27f063ea52d87d7a23a185ca165bec23b5adc8deaf',
+          version: '2e4785a4d80dadf580077b2244c8d7c05d8e3faac04a04c02d8e099dd2876789',
           input: {
             image: image,
-            style: replicateStyle,
             prompt: `${finalPrompt}, beautiful face, symmetrical features, smooth skin, charming smile, gorgeous, highly detailed`,
-            denoising_strength: 0.85,
-            instant_id_strength: 0.4,
-            control_depth_strength: 0.3,
             negative_prompt: 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, realistic, photo, photograph, ugly, distorted, deformed',
+            sdxl_weights: selectedWeights,
+            ip_adapter_scale: 0.8,
+            num_inference_steps: 30,
+            guidance_scale: 5
           }
         })
       });
@@ -93,7 +93,7 @@ export default async function handler(req, res) {
       console.log(`[VERCEL REPLICATE] Prediction created with ID: ${predictionId}. Status: ${status}`);
 
       let attempts = 0;
-      const maxAttempts = 40; // 최대 60초 대기
+      const maxAttempts = 100; // 최대 150초 대기
 
       while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1500));
