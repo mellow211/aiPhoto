@@ -1,10 +1,10 @@
 const STYLE_PROMPTS = {
-  watercolor: 'watercolor caricature painting, soft watercolor textures, artistic pencil sketch outlines, colorful wash, whimsical, clean studio background, highly detailed, expressive portrait',
-  comic: 'retro american comic book style caricature, bold ink outlines, dynamic halftone dots pattern, vibrant colors, pop art, action pose, detailed illustration, expressive features',
-  hero: 'epic marvel superhero caricature, dynamic cinematic lighting, wearing a custom heroic costume, dramatic pose, glowing power effects, detailed digital painting, heroic expression',
-  pixel: 'retro 8-bit arcade game character, pixel art caricature, pixelated portrait, classic color palette, blocky shadows, clean game background, retro aesthetic',
-  disney: '3D Disney Pixar character caricature, rendering in cute claymation style, big expressive eyes, smooth glossy lighting, colorful background, highly detailed 3D render',
-  sketch: 'fine art graphite pencil sketch caricature, hand-drawn shading, cross-hatching, realistic pencil textures, paper background, black and white portrait, highly artistic, clean line art'
+  watercolor: 'gorgeous watercolor portrait illustration, soft artistic watercolor textures, colorful paint wash, whimsical, clean studio background, pretty face, beautiful, detailed digital art',
+  comic: 'beautiful webtoon digital illustration, charming anime style portrait, clean ink outlines, vibrant colors, pop art, detailed, handsome, pretty face, expressive friendly features',
+  hero: 'epic beautiful marvel superhero illustration, dynamic cinematic lighting, wearing a custom heroic costume, dramatic pose, glowing power effects, detailed digital painting, handsome, pretty face',
+  pixel: 'cute retro 8-bit pixel art character portrait, classic color palette, blocky shadows, clean game background, retro aesthetic, charming, cute features',
+  disney: 'cute 3D Disney Pixar character, gorgeous glossy render, big beautiful expressive eyes, smooth rendering style, colorful background, highly detailed 3D render, pretty, lovely face',
+  sketch: 'fine art graphite pencil sketch portrait, beautiful hand-drawn shading, cross-hatching, realistic pencil textures, clean white paper background, highly artistic, clean line art, pretty face'
 };
 
 export default async function handler(req, res) {
@@ -71,11 +71,11 @@ export default async function handler(req, res) {
           input: {
             image: image,
             style: replicateStyle,
-            prompt: finalPrompt,
-            denoising_strength: 0.75,
-            instant_id_strength: 0.7,
-            control_depth_strength: 0.6,
-            negative_prompt: 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, realistic, photo, photograph',
+            prompt: `${finalPrompt}, beautiful face, symmetrical features, smooth skin, charming smile, gorgeous, highly detailed`,
+            denoising_strength: 0.85,
+            instant_id_strength: 0.4,
+            control_depth_strength: 0.3,
+            negative_prompt: 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, realistic, photo, photograph, ugly, distorted, deformed',
           }
         })
       });
