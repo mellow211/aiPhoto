@@ -21,7 +21,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Active Replicate Model Configuration (Change this to 'qwen/qwen-image-edit-plus' to switch models)
-const ACTIVE_REPLICATE_MODEL = 'black-forest-labs/flux-kontext-pro';
+const ACTIVE_REPLICATE_MODEL = 'qwen/qwen-image-edit-plus';
 
 // Serve static assets in production
 const distPath = path.join(__dirname, 'dist');

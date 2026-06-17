@@ -1,5 +1,5 @@
 // Active Replicate Model Configuration (Change this to 'qwen/qwen-image-edit-plus' to switch models)
-const ACTIVE_REPLICATE_MODEL = 'black-forest-labs/flux-kontext-pro';
+const ACTIVE_REPLICATE_MODEL = 'qwen/qwen-image-edit-plus';
 
 const STYLE_PROMPTS_MALE = {
   default: 'gorgeous caricature illustration of a male character, fun cartoon caricature art style, expressive exaggerated caricature features, friendly smiling expression, clean background',
