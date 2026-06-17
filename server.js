@@ -20,6 +20,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Active Replicate Model Configuration (Change this to 'qwen/qwen-image-edit-plus' to switch models)
+const ACTIVE_REPLICATE_MODEL = 'black-forest-labs/flux-kontext-pro';
+
 // Serve static assets in production
 const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
@@ -30,6 +33,7 @@ if (fs.existsSync(distPath)) {
 // Style Prompt Map for Stability AI & Replicate
 // -------------------------------------------------------------
 const STYLE_PROMPTS_MALE = {
+  default: 'gorgeous caricature illustration of a male character, fun cartoon caricature art style, expressive exaggerated caricature features, friendly smiling expression, clean background',
   watercolor: 'gorgeous stylized watercolor caricature portrait illustration, soft artistic watercolor textures, colorful paint wash, whimsical, clean studio background, handsome face, manly features, highly detailed digital art',
   comic: 'handsome webtoon digital caricature illustration, charming anime style portrait, clean ink outlines, vibrant colors, pop art, detailed, handsome, expressive friendly features',
   hero: 'epic comic book male superhero caricature illustration, dynamic cinematic lighting, wearing a custom heroic costume, dramatic pose, glowing power effects, detailed digital painting, handsome man, muscular build',
@@ -39,6 +43,7 @@ const STYLE_PROMPTS_MALE = {
 };
 
 const STYLE_PROMPTS_FEMALE = {
+  default: 'gorgeous caricature illustration of a female character, fun cartoon caricature art style, expressive exaggerated caricature features, friendly smiling expression, clean background',
   watercolor: 'gorgeous stylized watercolor caricature portrait illustration, soft artistic watercolor textures, colorful paint wash, whimsical, clean studio background, beautiful face, pretty features, highly detailed digital art',
   comic: 'beautiful webtoon digital caricature illustration, charming anime style portrait, clean ink outlines, vibrant colors, pop art, detailed, pretty face, expressive friendly features',
   hero: 'epic beautiful comic book female superhero caricature illustration, dynamic cinematic lighting, wearing a custom heroic costume, dramatic pose, glowing power effects, detailed digital painting, pretty face',
@@ -189,15 +194,27 @@ app.post('/api/generate', async (req, res) => {
   const selectedGender = gender || 'male';
   const selectedStyle = style || 'watercolor';
   const promptsByGender = selectedGender === 'female' ? STYLE_PROMPTS_FEMALE : STYLE_PROMPTS_MALE;
-  const stylePrompt = promptsByGender[selectedStyle] || promptsByGender.watercolor;
+  const stylePrompt = promptsByGender[selectedStyle] || promptsByGender.default || promptsByGender.watercolor;
   
   // Translate custom prompt to English
   const translatedPrompt = await translateToEnglish(prompt);
   
-  // Combine preset style prompt with optional custom user prompt
-  const finalPrompt = translatedPrompt 
-    ? `${stylePrompt}, ${translatedPrompt}`
-    : stylePrompt;
+  const baseCaricaturePrompt = `Create a professional theme-park style caricature from this photo. ` +
+    `This must not look like a simple cartoon filter or a painted version of the photo. ` +
+    `Keep the person clearly recognizable, including hairstyle, face shape, expression, and outfit. ` +
+    `Create a large head and small body caricature. ` +
+    `Slightly exaggerate the person's most distinctive facial features in a cute, friendly, and flattering way. ` +
+    `Emphasize the face shape, eyes, nose, smile, and hairstyle while preserving identity. ` +
+    `Use clean bold outlines, bright cheerful colors, polished illustration quality, and a souvenir caricature style. ` +
+    `Make it suitable for children and families at an AI photo booth. ` +
+    `No text, no watermark, no logo, no realistic photo texture, no plain cartoon filter. ` +
+    `Use a simple clean background or transparent background if supported.`;
+
+  // Combine base caricature prompt, preset style prompt, and optional custom user prompt
+  let finalPrompt = `${baseCaricaturePrompt} Style: ${stylePrompt}.`;
+  if (translatedPrompt) {
+    finalPrompt += ` Background and outfit instructions: ${translatedPrompt}.`;
+  }
 
   const openaiKey = process.env.OPENAI_API_KEY;
   const replicateToken = process.env.REPLICATE_API_TOKEN;
@@ -299,37 +316,38 @@ app.post('/api/generate', async (req, res) => {
   }
 
   // -------------------------------------------------------------
-  // 2. Replicate API Mode (flux-kontext-apps/face-to-many-kontext)
+  // 2. Replicate API Mode (flux-kontext-pro or qwen-image-edit-plus)
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      console.log(`[REPLICATE AI] Running face-to-many-kontext. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[REPLICATE AI] Running ${ACTIVE_REPLICATE_MODEL}. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[REPLICATE AI] Prompt: "${finalPrompt}"`);
 
-      let selectedStylePrompt = STYLE_MAP[selectedStyle] || STYLE_MAP.default;
-      let personaPrompt = `caricature of a ${selectedGender === 'female' ? 'female' : 'male'} character`;
-
-      if (translatedPrompt) {
-        // Enforce background/outfit override in both style and persona parameters
-        const overrideInstruction = `, with background and outfit strictly matching: ${translatedPrompt}`;
-        selectedStylePrompt += overrideInstruction;
-        personaPrompt += overrideInstruction;
+      let inputPayload = {};
+      if (ACTIVE_REPLICATE_MODEL === 'qwen/qwen-image-edit-plus') {
+        inputPayload = {
+          image: [image],
+          prompt: finalPrompt,
+          go_fast: true,
+          aspect_ratio: 'match_input_image',
+          output_format: 'png',
+          output_quality: 95
+        };
       } else {
-        personaPrompt += `, friendly smiling expression`;
+        // Default to black-forest-labs/flux-kontext-pro
+        inputPayload = {
+          input_image: image,
+          prompt: finalPrompt,
+          aspect_ratio: 'match_input_image',
+          output_format: 'png',
+          safety_tolerance: 2,
+          prompt_upsampling: false
+        };
       }
 
-      console.log(`[REPLICATE AI] Style Prompt: "${selectedStylePrompt}"`);
-      console.log(`[REPLICATE AI] Persona Prompt: "${personaPrompt}"`);
-
       const prediction = await createPredictionWithRetry(
-        'flux-kontext-apps/face-to-many-kontext',
-        {
-          input_image: image,
-          style: selectedStylePrompt,
-          persona: personaPrompt,
-          aspect_ratio: 'match_input_image',
-          preserve_outfit: false,
-          preserve_background: false
-        },
+        ACTIVE_REPLICATE_MODEL,
+        inputPayload,
         replicateToken
       );
       console.log(`[REPLICATE AI] Prediction created with ID: ${prediction.id}. Polling...`);
@@ -338,7 +356,7 @@ app.post('/api/generate', async (req, res) => {
       const resultImageUrl = Array.isArray(output) ? output[0] : output;
 
       if (!resultImageUrl) {
-        throw new Error('Replicate face-to-many-kontext did not return any output image URL.');
+        throw new Error('Replicate flux-kontext-pro did not return any output image URL.');
       }
 
       console.log(`[REPLICATE AI] Generation succeeded. Downloading image from ${resultImageUrl}...`);
@@ -353,9 +371,9 @@ app.post('/api/generate', async (req, res) => {
 
       return res.json({
         success: true,
-        image: `data:image/jpeg;base64,${base64Image}`,
+        image: `data:image/png;base64,${base64Image}`,
         isMock: false,
-        promptUsed: `Style: ${selectedStylePrompt} | Persona: ${personaPrompt}`
+        promptUsed: finalPrompt
       });
 
     } catch (error) {
