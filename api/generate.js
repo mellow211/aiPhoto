@@ -48,8 +48,18 @@ export default async function handler(req, res) {
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      console.log(`[VERCEL REPLICATE] Running image-to-image caricature pipeline. Style: ${selectedStyle}`);
+      console.log(`[VERCEL REPLICATE] Running face-to-many caricature pipeline. Style: ${selectedStyle}`);
       
+      const replicateStyles = {
+        watercolor: 'Clay',
+        comic: 'Video game',
+        hero: 'Video game',
+        pixel: 'Pixels',
+        disney: '3D',
+        sketch: 'Clay'
+      };
+      const replicateStyle = replicateStyles[selectedStyle] || '3D';
+
       const response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
@@ -57,14 +67,15 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+          version: 'a07f252abbbd832009640b27f063ea52d87d7a23a185ca165bec23b5adc8deaf',
           input: {
             image: image,
+            style: replicateStyle,
             prompt: finalPrompt,
-            prompt_strength: 0.65,
-            negative_prompt: 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions',
-            guidance_scale: 7.5,
-            num_inference_steps: 30,
+            denoising_strength: 0.75,
+            instant_id_strength: 0.7,
+            control_depth_strength: 0.6,
+            negative_prompt: 'blurry, low quality, photorealistic, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, realistic, photo, photograph',
           }
         })
       });
