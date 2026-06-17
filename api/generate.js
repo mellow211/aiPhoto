@@ -161,12 +161,107 @@ export default async function handler(req, res) {
     ? `${stylePrompt}, ${translatedPrompt}`
     : stylePrompt;
 
+  const openaiKey = process.env.OPENAI_API_KEY;
   const replicateToken = process.env.REPLICATE_API_TOKEN;
   const geminiKey = process.env.GEMINI_API_KEY;
   const stabilityKey = process.env.STABILITY_API_KEY;
 
   // -------------------------------------------------------------
-  // 1. Replicate API Mode (LLaVA Image-to-Text + SDXL Text-to-Image)
+  // 1. OpenAI API Mode (GPT-4o Vision + DALL-E 3 Pipeline)
+  // -------------------------------------------------------------
+  if (openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE') {
+    try {
+      console.log(`[VERCEL OPENAI] Running GPT-4o + DALL-E 3 caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+      const mimeType = image.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
+
+      // Stage 1: Analyze captured image using GPT-4o Vision
+      const visionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. Output ONLY the description in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Data}`
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 300
+        })
+      });
+
+      if (!visionResponse.ok) {
+        const errText = await visionResponse.text();
+        throw new Error(`OpenAI GPT-4o vision analysis failed: ${errText}`);
+      }
+
+      const visionData = await visionResponse.json();
+      const faceDescription = visionData.choices?.[0]?.message?.content || 'A person';
+      console.log(`[VERCEL OPENAI] Face Analysis: ${faceDescription}`);
+
+      // Stage 2: Pass description and user custom requirements to DALL-E 3
+      const finalPromptForDalle = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      console.log(`[VERCEL OPENAI] Sending prompt to DALL-E 3: ${finalPromptForDalle}`);
+
+      const dalleResponse = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'dall-e-3',
+          prompt: finalPromptForDalle,
+          n: 1,
+          size: '1024x1024',
+          response_format: 'b64_json'
+        })
+      });
+
+      if (!dalleResponse.ok) {
+        const errText = await dalleResponse.text();
+        throw new Error(`OpenAI DALL-E 3 failed: ${errText}`);
+      }
+
+      const dalleData = await dalleResponse.json();
+      const base64Image = dalleData.data?.[0]?.b64_json;
+      if (!base64Image) {
+        throw new Error('DALL-E 3 returned no image data.');
+      }
+
+      return res.status(200).json({
+        success: true,
+        image: `data:image/png;base64,${base64Image}`,
+        isMock: false,
+        promptUsed: finalPromptForDalle
+      });
+
+    } catch (error) {
+      console.error('[VERCEL OPENAI ERROR]', error);
+      return res.status(500).json({ 
+        error: 'OpenAI 이미지 생성 중 오류가 발생했습니다.', 
+        details: error.message 
+      });
+    }
+  }
+
+  // -------------------------------------------------------------
+  // 2. Replicate API Mode (LLaVA Image-to-Text + SDXL Text-to-Image)
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
