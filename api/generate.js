@@ -77,6 +77,53 @@ async function pollReplicatePrediction(predictionId, replicateToken) {
   return output;
 }
 
+// Rate limit retry wrapper for creating Replicate predictions
+async function createPredictionWithRetry(version, input, replicateToken) {
+  let attempts = 0;
+  const maxAttempts = 5;
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${replicateToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ version, input })
+    });
+
+    if (response.status === 429) {
+      const errBodyText = await response.text();
+      let retryAfter = 3; // default fallback wait
+      try {
+        const errJson = JSON.parse(errBodyText);
+        if (errJson.retry_after) {
+          retryAfter = parseFloat(errJson.retry_after) + 0.5;
+        }
+      } catch (e) {}
+
+      const headerRetryAfter = response.headers.get('retry-after');
+      if (headerRetryAfter) {
+        retryAfter = parseFloat(headerRetryAfter) + 0.5;
+      }
+
+      console.warn(`[VERCEL REPLICATE] Rate limited (429). Retrying after ${retryAfter}s... (Attempt ${attempts}/${maxAttempts})`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      continue;
+    }
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Replicate API returned status ${response.status}: ${errText}`);
+    }
+
+    return await response.json();
+  }
+
+  throw new Error('Replicate API failed after maximum retry attempts due to rate limit (429).');
+}
+
 export default async function handler(req, res) {
   // Setup CORS Headers for safety
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -127,28 +174,12 @@ export default async function handler(req, res) {
 
       const llavaPrompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. Output ONLY the description in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
 
-      // 1. Call LLaVA to describe the image
-      const llavaResponse = await fetch('https://api.replicate.com/v1/predictions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${replicateToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          version: '80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
-          input: {
-            image: image,
-            prompt: llavaPrompt
-          }
-        })
-      });
-
-      if (!llavaResponse.ok) {
-        const errText = await llavaResponse.text();
-        throw new Error(`Replicate LLaVA API returned status ${llavaResponse.status}: ${errText}`);
-      }
-
-      const llavaPrediction = await llavaResponse.json();
+      // 1. Call LLaVA to describe the image using retry wrapper
+      const llavaPrediction = await createPredictionWithRetry(
+        '80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
+        { image: image, prompt: llavaPrompt },
+        replicateToken
+      );
       console.log(`[VERCEL REPLICATE] LLaVA prediction created with ID: ${llavaPrediction.id}. Polling...`);
       
       const llavaOutput = await pollReplicatePrediction(llavaPrediction.id, replicateToken);
@@ -161,31 +192,19 @@ export default async function handler(req, res) {
       const finalPromptForSDXL = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
       console.log(`[VERCEL REPLICATE] Sending prompt to SDXL: "${finalPromptForSDXL}"`);
 
-      const sdxlResponse = await fetch('https://api.replicate.com/v1/predictions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${replicateToken}`,
-          'Content-Type': 'application/json',
+      // 2. Call SDXL using retry wrapper
+      const sdxlPrediction = await createPredictionWithRetry(
+        '7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
+        {
+          prompt: finalPromptForSDXL,
+          negative_prompt: 'blurry, low quality, photorealistic, realistic, photograph, photo, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, ugly, distorted, deformed, group, 2girls, 2boys, multiple views, multi-panel, collage, split screen',
+          width: 1024,
+          height: 1024,
+          num_inference_steps: 30,
+          guidance_scale: 7.5
         },
-        body: JSON.stringify({
-          version: '7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
-          input: {
-            prompt: finalPromptForSDXL,
-            negative_prompt: 'blurry, low quality, photorealistic, realistic, photograph, photo, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, ugly, distorted, deformed, group, 2girls, 2boys, multiple views, multi-panel, collage, split screen',
-            width: 1024,
-            height: 1024,
-            num_inference_steps: 30,
-            guidance_scale: 7.5
-          }
-        })
-      });
-
-      if (!sdxlResponse.ok) {
-        const errText = await sdxlResponse.text();
-        throw new Error(`Replicate SDXL API returned status ${sdxlResponse.status}: ${errText}`);
-      }
-
-      const sdxlPrediction = await sdxlResponse.json();
+        replicateToken
+      );
       console.log(`[VERCEL REPLICATE] SDXL prediction created with ID: ${sdxlPrediction.id}. Polling...`);
 
       const sdxlOutput = await pollReplicatePrediction(sdxlPrediction.id, replicateToken);
