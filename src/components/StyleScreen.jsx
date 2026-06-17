@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
 const STYLES = [
+  { key: 'default', icon: '🎭', nameKo: '기본 캐리커처', nameEn: 'Classic Caricature' },
   { key: 'watercolor', icon: '🎨', nameKo: '수채화 스타일', nameEn: 'Watercolor Canvas' },
   { key: 'comic', icon: '💬', nameKo: '웹툰/코믹북 스타일', nameEn: 'Pop Comic Book' },
   { key: 'hero', icon: '⚡', nameKo: '슈퍼히어로 스타일', nameEn: 'Action Hero Portrait' },
@@ -10,7 +11,7 @@ const STYLES = [
 ];
 
 export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
-  const [selectedStyle, setSelectedStyle] = useState('watercolor');
+  const [selectedStyle, setSelectedStyle] = useState('default');
   const [customPrompt, setCustomPrompt] = useState('');
   const [gender, setGender] = useState('male');
 

@@ -16,6 +16,18 @@ const STYLE_PROMPTS_FEMALE = {
   sketch: 'fine art graphite pencil sketch caricature portrait, beautiful hand-drawn shading, cross-hatching, realistic pencil textures, clean white paper background, highly artistic, clean line art, pretty face'
 };
 
+const BASE_CARICATURE_PROMPT = 'gorgeous caricature illustration, fun cartoon caricature art style, expressive exaggerated caricature features';
+
+const STYLE_MAP = {
+  default: BASE_CARICATURE_PROMPT,
+  watercolor: `${BASE_CARICATURE_PROMPT}, soft watercolor textures, colorful paint wash, whimsical, clean studio background`,
+  comic: `${BASE_CARICATURE_PROMPT}, webtoon digital style, anime style, clean ink outlines, vibrant colors`,
+  hero: `${BASE_CARICATURE_PROMPT}, epic superhero style, dramatic cinematic lighting, glowing power effects`,
+  pixel: `${BASE_CARICATURE_PROMPT}, retro 8-bit pixel art style, blocky shadows, clean game background`,
+  disney: `${BASE_CARICATURE_PROMPT}, cute 3D animated movie style, glossy 3D render, big expressive eyes, smooth rendering`,
+  sketch: `${BASE_CARICATURE_PROMPT}, graphite pencil sketch style, hand-drawn shading, cross-hatching, clean paper background`
+};
+
 // Translation helper using Google Translate's free API
 async function translateToEnglish(text) {
   if (!text || typeof text !== 'string') return '';
@@ -270,17 +282,36 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // 2. Replicate API Mode (flux-kontext-apps/cartoonify)
+  // 2. Replicate API Mode (flux-kontext-apps/face-to-many-kontext)
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      console.log(`[VERCEL REPLICATE] Running flux-kontext-apps/cartoonify (Image-to-Image)`);
+      console.log(`[VERCEL REPLICATE] Running face-to-many-kontext. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+
+      let selectedStylePrompt = STYLE_MAP[selectedStyle] || STYLE_MAP.default;
+      let personaPrompt = `caricature of a ${selectedGender === 'female' ? 'female' : 'male'} character`;
+
+      if (translatedPrompt) {
+        // Enforce background/outfit override in both style and persona parameters
+        const overrideInstruction = `, with background and outfit strictly matching: ${translatedPrompt}`;
+        selectedStylePrompt += overrideInstruction;
+        personaPrompt += overrideInstruction;
+      } else {
+        personaPrompt += `, friendly smiling expression`;
+      }
+
+      console.log(`[VERCEL REPLICATE] Style Prompt: "${selectedStylePrompt}"`);
+      console.log(`[VERCEL REPLICATE] Persona Prompt: "${personaPrompt}"`);
 
       const prediction = await createPredictionWithRetry(
-        'flux-kontext-apps/cartoonify',
+        'flux-kontext-apps/face-to-many-kontext',
         {
           input_image: image,
-          aspect_ratio: 'match_input_image'
+          style: selectedStylePrompt,
+          persona: personaPrompt,
+          aspect_ratio: 'match_input_image',
+          preserve_outfit: false,
+          preserve_background: false
         },
         replicateToken
       );
@@ -290,7 +321,7 @@ export default async function handler(req, res) {
       const resultImageUrl = Array.isArray(output) ? output[0] : output;
 
       if (!resultImageUrl) {
-        throw new Error('Replicate cartoonify did not return any output image URL.');
+        throw new Error('Replicate face-to-many-kontext did not return any output image URL.');
       }
 
       console.log(`[VERCEL REPLICATE] Generation succeeded. Downloading image from ${resultImageUrl}...`);
@@ -307,7 +338,7 @@ export default async function handler(req, res) {
         success: true,
         image: `data:image/jpeg;base64,${base64Image}`,
         isMock: false,
-        promptUsed: 'flux-kontext-apps/cartoonify (Image-to-Image)'
+        promptUsed: `Style: ${selectedStylePrompt} | Persona: ${personaPrompt}`
       });
 
     } catch (error) {
