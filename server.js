@@ -113,17 +113,18 @@ async function createPredictionWithRetry(identifier, input, replicateToken) {
   let attempts = 0;
   const maxAttempts = 5;
 
-  const body = {};
+  let url = 'https://api.replicate.com/v1/predictions';
+  const body = { input };
+
   if (identifier.includes('/')) {
-    body.model = identifier;
+    url = `https://api.replicate.com/v1/models/${identifier}/predictions`;
   } else {
     body.version = identifier;
   }
-  body.input = input;
 
   while (attempts < maxAttempts) {
     attempts++;
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${replicateToken}`,
