@@ -207,7 +207,7 @@ app.post('/api/generate', async (req, res) => {
               content: [
                 {
                   type: 'text',
-                  text: `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. Output ONLY the description in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`
+                  text: `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`
                 },
                 {
                   type: 'image_url',
@@ -284,7 +284,7 @@ app.post('/api/generate', async (req, res) => {
     try {
       console.log(`[REPLICATE AI] Stage 1: Running LLaVA (Image-to-Text). Style: ${selectedStyle}, Gender: ${selectedGender}`);
 
-      const llavaPrompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. Output ONLY the description in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
+      const llavaPrompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
 
       // 1. Call LLaVA to describe the image using retry wrapper
       const llavaPrediction = await createPredictionWithRetry(
