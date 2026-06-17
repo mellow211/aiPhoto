@@ -56,6 +56,144 @@ async function translateToEnglish(text) {
   }
 }
 
+// Prompt Expansion Helpers using dynamic API configurations
+async function expandPromptWithGemini(promptText, geminiKey) {
+  const systemPrompt = `You are a prompt designer for an AI caricature photo booth. Your task is to take a simple, short user instruction (in Korean or English) and expand it into a detailed, creative description in English, optimized for image generation. Focus purely on describing the requested clothing, props, and setting in detail. Keep it descriptive, bright, and cheerful. DO NOT include any introductory or meta text like "Here is the expanded prompt". Only output the final expanded English prompt in a single paragraph (maximum 3 sentences, 40 words).`;
+  
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: systemPrompt },
+              { text: `User Input: ${promptText}` }
+            ]
+          }
+        ]
+      })
+    }
+  );
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini expansion HTTP error: ${response.status}. ${errText}`);
+  }
+  const data = await response.json();
+  const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!resultText) throw new Error('Gemini returned empty expanded prompt');
+  return resultText.trim();
+}
+
+async function expandPromptWithOpenAI(promptText, openaiKey) {
+  const systemPrompt = `You are a prompt designer for an AI caricature photo booth. Your task is to take a simple, short user instruction (in Korean or English) and expand it into a detailed, creative description in English, optimized for image generation. Focus purely on describing the requested clothing, props, and setting in detail. Keep it descriptive, bright, and cheerful. DO NOT include any introductory or meta text like "Here is the expanded prompt". Only output the final expanded English prompt in a single paragraph (maximum 3 sentences, 40 words).`;
+  
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: promptText }
+      ],
+      max_tokens: 100
+    })
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI expansion HTTP error: ${response.status}. ${errText}`);
+  }
+  const data = await response.json();
+  const resultText = data.choices?.[0]?.message?.content;
+  if (!resultText) throw new Error('OpenAI returned empty expanded prompt');
+  return resultText.trim();
+}
+
+async function expandPromptWithReplicate(promptText, replicateToken) {
+  const systemPrompt = `You are a prompt designer for an AI caricature photo booth. Your task is to take a simple, short user instruction (in Korean or English) and expand it into a detailed, creative description in English, optimized for image generation. Focus purely on describing the requested clothing, props, and setting in detail. Keep it descriptive, bright, and cheerful. DO NOT include any introductory or meta text like "Here is the expanded prompt". Only output the final expanded English prompt in a single paragraph (maximum 3 sentences, 40 words).`;
+  
+  const prediction = await createPredictionWithRetry(
+    'meta/meta-llama-3-8b-instruct',
+    {
+      prompt: `User Input: ${promptText}`,
+      system_prompt: systemPrompt,
+      max_new_tokens: 100,
+      temperature: 0.7
+    },
+    replicateToken
+  );
+  
+  const output = await pollReplicatePrediction(prediction.id, replicateToken);
+  let resultText = Array.isArray(output) ? output.join('') : output;
+  if (!resultText) throw new Error('Replicate LLM returned empty expanded prompt');
+  
+  resultText = resultText.replace(/Output:/gi, '').replace(/User Input:/gi, '').trim();
+  return resultText;
+}
+
+async function expandUserPrompt(promptText) {
+  if (!promptText || typeof promptText !== 'string') return '';
+  const trimmed = promptText.trim();
+  if (!trimmed) return '';
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  // 1. Try Gemini
+  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
+    try {
+      console.log(`[PROMPT EXPANSION] Trying Gemini for: "${trimmed}"`);
+      const expanded = await expandPromptWithGemini(trimmed, geminiKey);
+      console.log(`[PROMPT EXPANSION] Gemini Success: "${expanded}"`);
+      return expanded;
+    } catch (e) {
+      console.warn(`[PROMPT EXPANSION] Gemini failed, falling back:`, e.message);
+    }
+  }
+
+  // 2. Try OpenAI
+  if (openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE') {
+    try {
+      console.log(`[PROMPT EXPANSION] Trying OpenAI for: "${trimmed}"`);
+      const expanded = await expandPromptWithOpenAI(trimmed, openaiKey);
+      console.log(`[PROMPT EXPANSION] OpenAI Success: "${expanded}"`);
+      return expanded;
+    } catch (e) {
+      console.warn(`[PROMPT EXPANSION] OpenAI failed, falling back:`, e.message);
+    }
+  }
+
+  // 3. Try Replicate (Llama-3-8b)
+  if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
+    try {
+      console.log(`[PROMPT EXPANSION] Trying Replicate (Llama-3-8b) for: "${trimmed}"`);
+      const expanded = await expandPromptWithReplicate(trimmed, replicateToken);
+      console.log(`[PROMPT EXPANSION] Replicate Success: "${expanded}"`);
+      return expanded;
+    } catch (e) {
+      console.warn(`[PROMPT EXPANSION] Replicate failed, falling back:`, e.message);
+    }
+  }
+
+  // 4. Final Fallback: Simple Translation
+  try {
+    console.log(`[PROMPT EXPANSION] Falling back to Google Translation for: "${trimmed}"`);
+    const translated = await translateToEnglish(trimmed);
+    console.log(`[PROMPT EXPANSION] Translation Success: "${translated}"`);
+    return translated;
+  } catch (e) {
+    console.error(`[PROMPT EXPANSION] Final fallback failed:`, e.message);
+    return trimmed;
+  }
+}
+
 // Polling helper for Replicate predictions
 async function pollReplicatePrediction(predictionId, replicateToken) {
   let status = 'starting';
@@ -179,8 +317,8 @@ export default async function handler(req, res) {
   const promptsByGender = selectedGender === 'female' ? STYLE_PROMPTS_FEMALE : STYLE_PROMPTS_MALE;
   const stylePrompt = promptsByGender[selectedStyle] || promptsByGender.default || promptsByGender.watercolor;
   
-  // Translate custom prompt to English
-  const translatedPrompt = await translateToEnglish(prompt);
+  // Translate and expand custom prompt using dynamic AI LLM tools
+  const translatedPrompt = await expandUserPrompt(prompt);
   
   const baseCaricaturePrompt = `Create a professional theme-park style caricature from this photo. ` +
     `This must not look like a simple cartoon filter or a painted version of the photo. ` +
