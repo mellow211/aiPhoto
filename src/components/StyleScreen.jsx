@@ -14,6 +14,32 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
   const [selectedStyle, setSelectedStyle] = useState('default');
   const [customPrompt, setCustomPrompt] = useState('');
   const [gender, setGender] = useState('male');
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(3);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      let val = 3;
+      if (window.innerWidth <= 480) {
+        val = 1;
+      } else if (window.innerWidth <= 850) {
+        val = 2;
+      }
+      setItemsPerPage(val);
+      setCurrentIndex((prev) => Math.min(STYLES.length - val, prev));
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handlePrev = () => {
+    setCurrentIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleNext = () => {
+    setCurrentIndex((prev) => Math.min(STYLES.length - itemsPerPage, prev + 1));
+  };
 
   const handleGenerate = () => {
     onSelectStyle(selectedStyle, customPrompt, gender);
@@ -56,23 +82,46 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
           </div>
         </div>
 
-        {/* Style Grid */}
-        <div className="style-grid-container">
-          <div className="style-grid">
-            {STYLES.map((style) => (
+        {/* Style Carousel */}
+        <div className="style-carousel-container">
+          <button 
+            type="button" 
+            className="carousel-nav-btn prev" 
+            onClick={handlePrev}
+            disabled={currentIndex === 0}
+            aria-label="Previous styles"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          
+          <div className="style-carousel-track">
+            {STYLES.slice(currentIndex, currentIndex + itemsPerPage).map((style) => (
               <button
                 key={style.key}
-                className={`style-item ${selectedStyle === style.key ? 'selected' : ''}`}
+                type="button"
+                className={`style-item-card ${selectedStyle === style.key ? 'selected' : ''}`}
                 onClick={() => setSelectedStyle(style.key)}
               >
-                <span className="style-icon">{style.icon}</span>
-                <div className="style-info">
-                  <span className="style-name-ko">{style.nameKo}</span>
-                  <span className="style-name-en">{style.nameEn}</span>
-                </div>
+                <span className="style-card-icon">{style.icon}</span>
+                <span className="style-card-name-ko">{style.nameKo}</span>
+                <span className="style-card-name-en">{style.nameEn}</span>
               </button>
             ))}
           </div>
+          
+          <button 
+            type="button" 
+            className="carousel-nav-btn next" 
+            onClick={handleNext}
+            disabled={currentIndex >= STYLES.length - itemsPerPage}
+            aria-label="Next styles"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
         </div>
 
         {/* Custom text input */}
