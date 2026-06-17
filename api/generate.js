@@ -39,6 +39,44 @@ async function translateToEnglish(text) {
   }
 }
 
+// Polling helper for Replicate predictions
+async function pollReplicatePrediction(predictionId, replicateToken) {
+  let status = 'starting';
+  let output = null;
+  let attempts = 0;
+  const maxAttempts = 120; // Up to 144 seconds wait time
+
+  while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled' && attempts < maxAttempts) {
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    attempts++;
+
+    const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      headers: {
+        'Authorization': `Bearer ${replicateToken}`,
+      }
+    });
+
+    if (!pollResponse.ok) {
+      const errText = await pollResponse.text();
+      throw new Error(`Replicate poll failed: ${errText}`);
+    }
+
+    const pollData = await pollResponse.json();
+    status = pollData.status;
+    output = pollData.output;
+
+    if (status === 'failed' || status === 'canceled') {
+      throw new Error(`Replicate prediction ended with status: ${status}. Error: ${pollData.error || 'Unknown error'}`);
+    }
+  }
+
+  if (status !== 'succeeded') {
+    throw new Error('Replicate prediction timed out.');
+  }
+
+  return output;
+}
+
 export default async function handler(req, res) {
   // Setup CORS Headers for safety
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -81,95 +119,80 @@ export default async function handler(req, res) {
   const stabilityKey = process.env.STABILITY_API_KEY;
 
   // -------------------------------------------------------------
-  // 1. Replicate API Mode (Stable Diffusion XL Image-to-Image / InstantID)
+  // 1. Replicate API Mode (LLaVA Image-to-Text + SDXL Text-to-Image)
   // -------------------------------------------------------------
   if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      console.log(`[VERCEL REPLICATE] Running zsxkib/instant-id caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
-      
-      const baseModelWeights = {
-        watercolor: 'dreamshaper-xl',
-        comic: 'animagine-xl-30',
-        hero: 'animagine-xl-30',
-        pixel: 'dreamshaper-xl',
-        disney: 'dynavision-xl-v0610',
-        sketch: 'dreamshaper-xl'
-      };
-      const selectedWeights = baseModelWeights[selectedStyle] || 'stable-diffusion-xl-base-1.0';
+      console.log(`[VERCEL REPLICATE] Stage 1: Running LLaVA (Image-to-Text). Style: ${selectedStyle}, Gender: ${selectedGender}`);
 
-      const genderPrompt = selectedGender === 'female'
-        ? 'solo, 1girl, beautiful face, female, gorgeous, lovely features, highly detailed, symmetrical features, smooth skin, charming smile'
-        : 'solo, 1boy, handsome face, male, masculine features, handsome, highly detailed, symmetrical features, smooth skin, charming smile';
+      const llavaPrompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. Output ONLY the description in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
 
-      const negativePrompt = 'group, 2boys, 2girls, multiple views, multi-panel, collage, split screen, blurry, low quality, photorealistic, realistic, photograph, photo, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, ugly, distorted, deformed';
-
-      const response = await fetch('https://api.replicate.com/v1/predictions', {
+      // 1. Call LLaVA to describe the image
+      const llavaResponse = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${replicateToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          version: '2e4785a4d80dadf580077b2244c8d7c05d8e3faac04a04c02d8e099dd2876789',
+          version: '80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
           input: {
             image: image,
-            prompt: `${finalPrompt}, ${genderPrompt}`,
-            negative_prompt: negativePrompt,
-            sdxl_weights: selectedWeights,
-            ip_adapter_scale: 0.62, // Reduced from 0.8 for smoother caricature stylization
-            num_inference_steps: 30,
-            guidance_scale: 7 // Increased from 5 for better style prompt compliance
+            prompt: llavaPrompt
           }
         })
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Replicate API returned status ${response.status}: ${errText}`);
+      if (!llavaResponse.ok) {
+        const errText = await llavaResponse.text();
+        throw new Error(`Replicate LLaVA API returned status ${llavaResponse.status}: ${errText}`);
       }
 
-      const prediction = await response.json();
-      const predictionId = prediction.id;
-      let status = prediction.status;
-      let output = null;
+      const llavaPrediction = await llavaResponse.json();
+      console.log(`[VERCEL REPLICATE] LLaVA prediction created with ID: ${llavaPrediction.id}. Polling...`);
+      
+      const llavaOutput = await pollReplicatePrediction(llavaPrediction.id, replicateToken);
+      const faceDescription = Array.isArray(llavaOutput) ? llavaOutput.join('') : llavaOutput;
+      console.log(`[VERCEL REPLICATE] LLaVA Face Analysis description: "${faceDescription}"`);
 
-      console.log(`[VERCEL REPLICATE] Prediction created with ID: ${predictionId}. Status: ${status}`);
+      // 2. Call SDXL to generate the caricature
+      console.log(`[VERCEL REPLICATE] Stage 2: Running SDXL (Text-to-Image).`);
+      
+      const finalPromptForSDXL = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      console.log(`[VERCEL REPLICATE] Sending prompt to SDXL: "${finalPromptForSDXL}"`);
 
-      let attempts = 0;
-      const maxAttempts = 100; // 최대 150초 대기
-
-      while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled' && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        attempts++;
-
-        const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-          headers: {
-            'Authorization': `Bearer ${replicateToken}`,
+      const sdxlResponse = await fetch('https://api.replicate.com/v1/predictions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${replicateToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: '7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc',
+          input: {
+            prompt: finalPromptForSDXL,
+            negative_prompt: 'blurry, low quality, photorealistic, realistic, photograph, photo, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, ugly, distorted, deformed, group, 2girls, 2boys, multiple views, multi-panel, collage, split screen',
+            width: 1024,
+            height: 1024,
+            num_inference_steps: 30,
+            guidance_scale: 7.5
           }
-        });
+        })
+      });
 
-        if (!pollResponse.ok) {
-          const errText = await pollResponse.text();
-          throw new Error(`Replicate poll failed: ${errText}`);
-        }
-
-        const pollData = await pollResponse.json();
-        status = pollData.status;
-        output = pollData.output;
-        console.log(`[VERCEL REPLICATE] Polling... Attempt ${attempts}. Status: ${status}`);
-
-        if (status === 'failed' || status === 'canceled') {
-          throw new Error(`Replicate prediction ended with status: ${status}. Error: ${pollData.error || 'Unknown error'}`);
-        }
+      if (!sdxlResponse.ok) {
+        const errText = await sdxlResponse.text();
+        throw new Error(`Replicate SDXL API returned status ${sdxlResponse.status}: ${errText}`);
       }
 
-      if (status !== 'succeeded') {
-        throw new Error('Replicate prediction timed out.');
-      }
+      const sdxlPrediction = await sdxlResponse.json();
+      console.log(`[VERCEL REPLICATE] SDXL prediction created with ID: ${sdxlPrediction.id}. Polling...`);
 
-      const resultImageUrl = Array.isArray(output) ? output[0] : output;
+      const sdxlOutput = await pollReplicatePrediction(sdxlPrediction.id, replicateToken);
+      const resultImageUrl = Array.isArray(sdxlOutput) ? sdxlOutput[0] : sdxlOutput;
+
       if (!resultImageUrl) {
-        throw new Error('Replicate did not return any output image URL.');
+        throw new Error('Replicate SDXL did not return any output image URL.');
       }
 
       console.log(`[VERCEL REPLICATE] Generation succeeded. Downloading image from ${resultImageUrl}...`);
@@ -186,7 +209,7 @@ export default async function handler(req, res) {
         success: true,
         image: `data:image/jpeg;base64,${base64Image}`,
         isMock: false,
-        promptUsed: `${finalPrompt}, ${genderPrompt}`
+        promptUsed: finalPromptForSDXL
       });
 
     } catch (error) {
