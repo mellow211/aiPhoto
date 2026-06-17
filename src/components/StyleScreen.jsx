@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const STYLES = [
   { key: 'default', icon: '🎭', nameKo: '기본 캐리커처', nameEn: 'Classic Caricature' },
@@ -14,31 +14,73 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
   const [selectedStyle, setSelectedStyle] = useState('default');
   const [customPrompt, setCustomPrompt] = useState('');
   const [gender, setGender] = useState('male');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState(3);
 
-  React.useEffect(() => {
-    const handleResize = () => {
-      let val = 3;
-      if (window.innerWidth <= 480) {
-        val = 1;
-      } else if (window.innerWidth <= 850) {
-        val = 2;
-      }
-      setItemsPerPage(val);
-      setCurrentIndex((prev) => Math.min(STYLES.length - val, prev));
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+  const carouselRef = useRef(null);
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeftState, setScrollLeftState] = useState(0);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(true);
+
+  // 스크롤 감지하여 버튼 활성화 여부 갱신
+  const handleScroll = () => {
+    const el = carouselRef.current;
+    if (!el) return;
+    // canPrev: 스크롤이 시작점(0)보다 10px 이상 우측에 있을 때
+    setCanPrev(el.scrollLeft > 10);
+    // canNext: 남은 스크롤 거리가 클라이언트 영역보다 10px 이상 있을 때
+    setCanNext(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+
+  // 마운트 시 및 리사이즈 시 초기 체크
+  useEffect(() => {
+    handleScroll();
+    window.addEventListener('resize', handleScroll);
+    return () => window.removeEventListener('resize', handleScroll);
   }, []);
 
+  // 화살표 버튼 클릭 스크롤 액션
   const handlePrev = () => {
-    setCurrentIndex((prev) => Math.max(0, prev - 1));
+    const el = carouselRef.current;
+    if (!el) return;
+    const cardWidth = el.querySelector('.style-item-card')?.clientWidth || 150;
+    const gap = 12;
+    el.scrollBy({ left: -(cardWidth + gap), behavior: 'smooth' });
   };
 
   const handleNext = () => {
-    setCurrentIndex((prev) => Math.min(STYLES.length - itemsPerPage, prev + 1));
+    const el = carouselRef.current;
+    if (!el) return;
+    const cardWidth = el.querySelector('.style-item-card')?.clientWidth || 150;
+    const gap = 12;
+    el.scrollBy({ left: cardWidth + gap, behavior: 'smooth' });
+  };
+
+  // 데스크톱 환경용 마우스 드래그 가로 스크롤 구현
+  const handleMouseDown = (e) => {
+    const el = carouselRef.current;
+    if (!el) return;
+    setIsMouseDown(true);
+    setStartX(e.pageX - el.offsetLeft);
+    setScrollLeftState(el.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsMouseDown(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsMouseDown(false);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isMouseDown) return;
+    e.preventDefault();
+    const el = carouselRef.current;
+    if (!el) return;
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - startX) * 1.5; // 드래그 속도 조절
+    el.scrollLeft = scrollLeftState - walk;
   };
 
   const handleGenerate = () => {
@@ -88,7 +130,7 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
             type="button" 
             className="carousel-nav-btn prev" 
             onClick={handlePrev}
-            disabled={currentIndex === 0}
+            disabled={!canPrev}
             aria-label="Previous styles"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -96,8 +138,16 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
             </svg>
           </button>
           
-          <div className="style-carousel-track">
-            {STYLES.slice(currentIndex, currentIndex + itemsPerPage).map((style) => (
+          <div 
+            ref={carouselRef}
+            className="style-carousel-track"
+            onScroll={handleScroll}
+            onMouseDown={handleMouseDown}
+            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+          >
+            {STYLES.map((style) => (
               <button
                 key={style.key}
                 type="button"
@@ -115,7 +165,7 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
             type="button" 
             className="carousel-nav-btn next" 
             onClick={handleNext}
-            disabled={currentIndex >= STYLES.length - itemsPerPage}
+            disabled={!canNext}
             aria-label="Next styles"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
