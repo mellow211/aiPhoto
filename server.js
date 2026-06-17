@@ -115,8 +115,10 @@ app.post('/api/generate', async (req, res) => {
       const selectedWeights = baseModelWeights[selectedStyle] || 'stable-diffusion-xl-base-1.0';
 
       const genderPrompt = selectedGender === 'female'
-        ? 'beautiful face, female, gorgeous, lovely features, highly detailed, symmetrical features, smooth skin, charming smile'
-        : 'handsome face, male, masculine features, handsome, highly detailed, symmetrical features, smooth skin, charming smile';
+        ? 'solo, 1girl, beautiful face, female, gorgeous, lovely features, highly detailed, symmetrical features, smooth skin, charming smile'
+        : 'solo, 1boy, handsome face, male, masculine features, handsome, highly detailed, symmetrical features, smooth skin, charming smile';
+
+      const negativePrompt = 'group, 2boys, 2girls, multiple views, multi-panel, collage, split screen, blurry, low quality, photorealistic, realistic, photograph, photo, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, ugly, distorted, deformed';
 
       const response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
@@ -129,7 +131,7 @@ app.post('/api/generate', async (req, res) => {
           input: {
             image: image,
             prompt: `${finalPrompt}, ${genderPrompt}`,
-            negative_prompt: 'blurry, low quality, photorealistic, realistic, photograph, photo, bad anatomy, deformed face, disfigured, extra limbs, bad proportions, ugly, distorted, deformed',
+            negative_prompt: negativePrompt,
             sdxl_weights: selectedWeights,
             ip_adapter_scale: 0.62, // Reduced from 0.8 for smoother caricature stylization
             num_inference_steps: 30,
