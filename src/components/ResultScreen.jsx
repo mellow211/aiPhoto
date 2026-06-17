@@ -9,7 +9,7 @@ const STYLE_NAMES = {
   sketch: '연필 스케치 (Pencil Sketch)'
 };
 
-export default function ResultScreen({ imageUrl, selectedStyle, customPrompt, onRestart }) {
+export default function ResultScreen({ imageUrl, selectedStyle, customPrompt, gender, onRestart }) {
   
   const handleDownload = () => {
     if (!imageUrl) return;
@@ -50,6 +50,10 @@ export default function ResultScreen({ imageUrl, selectedStyle, customPrompt, on
           <div className="result-detail-row">
             <span className="result-detail-label">선택한 스타일</span>
             <span className="result-detail-val">{STYLE_NAMES[selectedStyle] || selectedStyle}</span>
+          </div>
+          <div className="result-detail-row">
+            <span className="result-detail-label">성별</span>
+            <span className="result-detail-val">{gender === 'female' ? '여성 (Female)' : '남성 (Male)'}</span>
           </div>
           <div className="result-detail-row">
             <span className="result-detail-label">추가 요구사항</span>

@@ -10,6 +10,7 @@ export default function App() {
   const [capturedImage, setCapturedImage] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState('watercolor');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [gender, setGender] = useState('male');
   const [generatedCaricature, setGeneratedCaricature] = useState(null);
   const [error, setError] = useState(null);
 
@@ -24,9 +25,10 @@ export default function App() {
     setScreen('STYLE');
   };
 
-  const handleSelectStyle = async (styleKey, userPrompt) => {
+  const handleSelectStyle = async (styleKey, userPrompt, userGender) => {
     setSelectedStyle(styleKey);
     setCustomPrompt(userPrompt);
+    setGender(userGender);
     setScreen('LOADING');
 
     try {
@@ -38,7 +40,8 @@ export default function App() {
         body: JSON.stringify({
           image: capturedImage,
           style: styleKey,
-          prompt: userPrompt
+          prompt: userPrompt,
+          gender: userGender
         }),
       });
 
@@ -66,6 +69,7 @@ export default function App() {
     setCapturedImage(null);
     setSelectedStyle('watercolor');
     setCustomPrompt('');
+    setGender('male');
     setGeneratedCaricature(null);
     setError(null);
     setScreen('WELCOME');
@@ -98,6 +102,7 @@ export default function App() {
             imageUrl={generatedCaricature}
             selectedStyle={selectedStyle}
             customPrompt={customPrompt}
+            gender={gender}
             onRestart={handleRestart}
           />
         );

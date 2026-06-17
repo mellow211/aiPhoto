@@ -12,9 +12,10 @@ const STYLES = [
 export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
   const [selectedStyle, setSelectedStyle] = useState('watercolor');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [gender, setGender] = useState('male');
 
   const handleGenerate = () => {
-    onSelectStyle(selectedStyle, customPrompt);
+    onSelectStyle(selectedStyle, customPrompt, gender);
   };
 
   return (
@@ -28,7 +29,30 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
       <div className="style-options-panel">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <h2 style={{ fontSize: '1.3rem', fontFamily: 'var(--font-heading)', fontWeight: 700 }}>캐리커처 스타일 선택</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>생성하고 싶은 아트를 선택하고, 필요시 추가 상세 요구사항을 입력하세요.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>성별과 생성하고 싶은 아트를 선택하고, 추가 요구사항을 입력하세요.</p>
+        </div>
+
+        {/* Gender Selection */}
+        <div className="gender-selection-container">
+          <label className="prompt-label">성별 선택 (필수)</label>
+          <div className="gender-buttons">
+            <button 
+              type="button"
+              className={`gender-button ${gender === 'male' ? 'selected' : ''}`}
+              onClick={() => setGender('male')}
+            >
+              <span>🙋‍♂️</span>
+              <span>남성 (Male)</span>
+            </button>
+            <button 
+              type="button"
+              className={`gender-button ${gender === 'female' ? 'selected' : ''}`}
+              onClick={() => setGender('female')}
+            >
+              <span>🙋‍♀️</span>
+              <span>여성 (Female)</span>
+            </button>
+          </div>
         </div>
 
         {/* Style Grid */}
