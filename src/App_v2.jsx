@@ -25,7 +25,7 @@ export default function App() {
     setScreen('STYLE');
   };
 
-  const handleSelectStyle = async (styleKey, userPrompt, userGender, selectedModel) => {
+  const handleSelectStyle = async (styleKey, userPrompt, userGender) => {
     setSelectedStyle(styleKey);
     setCustomPrompt(userPrompt);
     setGender(userGender);
@@ -41,8 +41,7 @@ export default function App() {
           image: capturedImage,
           style: styleKey,
           prompt: userPrompt,
-          gender: userGender,
-          model: selectedModel
+          gender: userGender
         }),
       });
 

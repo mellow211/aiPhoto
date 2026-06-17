@@ -1,6 +1,37 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+// Setup __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Enable CORS and increase request body limit to handle base64 images
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 // Active Replicate Model Configuration (Change this to 'qwen/qwen-image-edit-plus' to switch models)
 const ACTIVE_REPLICATE_MODEL = 'qwen/qwen-image-edit-plus';
 
+// Serve static assets in production
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+}
+
+// -------------------------------------------------------------
+// Style Prompt Map for Stability AI & Replicate
+// -------------------------------------------------------------
 const STYLE_PROMPTS_MALE = {
   default: 'gorgeous caricature illustration of a male character, fun cartoon caricature art style, expressive exaggerated caricature features, friendly smiling expression, clean background',
   watercolor: 'gorgeous stylized watercolor caricature portrait illustration, soft artistic watercolor textures, colorful paint wash, whimsical, clean studio background, handsome face, manly features, highly detailed digital art',
@@ -272,7 +303,7 @@ async function createPredictionWithRetry(identifier, input, replicateToken) {
         retryAfter = parseFloat(headerRetryAfter) + 0.5;
       }
 
-      console.warn(`[VERCEL REPLICATE] Rate limited (429). Retrying after ${retryAfter}s... (Attempt ${attempts}/${maxAttempts})`);
+      console.warn(`[REPLICATE AI] Rate limited (429). Retrying after ${retryAfter}s... (Attempt ${attempts}/${maxAttempts})`);
       await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
       continue;
     }
@@ -288,28 +319,14 @@ async function createPredictionWithRetry(identifier, input, replicateToken) {
   throw new Error('Replicate API failed after maximum retry attempts due to rate limit (429).');
 }
 
-export default async function handler(req, res) {
-  // Setup CORS Headers for safety
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: '허용되지 않는 메서드입니다.' });
-  }
-
-  const { image, style, prompt, gender, model } = req.body;
+// -------------------------------------------------------------
+// API Route: Generate Caricature
+// -------------------------------------------------------------
+app.post('/api/generate', async (req, res) => {
+  const { image, style, prompt, gender } = req.body;
 
   if (!image) {
-    return res.status(400).json({ error: '이미지 데이터가 필요합니다.' });
+    return res.status(400).json({ error: 'Image is required.' });
   }
 
   const selectedGender = gender || 'male';
@@ -342,45 +359,12 @@ export default async function handler(req, res) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const stabilityKey = process.env.STABILITY_API_KEY;
 
-  // 1. Determine which model to run based on the request 'model' field
-  // If model is not specified, auto-detect based on available keys
-  let targetModel = model;
-  if (!targetModel) {
-    if (openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE') {
-      targetModel = 'openai_dalle';
-    } else if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
-      targetModel = 'replicate_flux';
-    } else if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
-      targetModel = 'gemini_imagen';
-    } else if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
-      targetModel = 'stability_sdxl';
-    } else {
-      targetModel = 'mock';
-    }
-  }
-
-  // 2. Validate API key availability for the selected model
-  if (targetModel === 'openai_dalle' && (!openaiKey || openaiKey === 'YOUR_OPENAI_API_KEY_HERE')) {
-    return res.status(400).json({ error: 'OpenAI API Key가 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if ((targetModel === 'replicate_flux' || targetModel === 'replicate_qwen') && (!replicateToken || replicateToken === 'YOUR_REPLICATE_API_TOKEN_HERE')) {
-    return res.status(400).json({ error: 'Replicate API Token이 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if (targetModel === 'gemini_imagen' && (!geminiKey || geminiKey === 'YOUR_GEMINI_API_KEY_HERE' || geminiKey.startsWith('AQ.'))) {
-    return res.status(400).json({ error: 'Gemini API Key가 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if (targetModel === 'stability_sdxl' && (!stabilityKey || stabilityKey === 'YOUR_STABILITY_API_KEY_HERE')) {
-    return res.status(400).json({ error: 'Stability AI API Key가 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-
-  // 3. Execute model-specific pipeline
-  
   // -------------------------------------------------------------
-  // OpenAI API Mode (GPT-4o Vision + DALL-E 3 Pipeline)
+  // 1. OpenAI API Mode (GPT-4o Vision + DALL-E 3 Pipeline)
   // -------------------------------------------------------------
-  if (targetModel === 'openai_dalle') {
+  if (openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE') {
     try {
-      console.log(`[VERCEL OPENAI] Running GPT-4o + DALL-E 3 caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[OPENAI AI] Running GPT-4o + DALL-E 3 caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
       const mimeType = image.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
 
@@ -421,11 +405,11 @@ export default async function handler(req, res) {
 
       const visionData = await visionResponse.json();
       const faceDescription = visionData.choices?.[0]?.message?.content || 'A person';
-      console.log(`[VERCEL OPENAI] Face Analysis: ${faceDescription}`);
+      console.log(`[OPENAI AI] Face Analysis: ${faceDescription}`);
 
       // Stage 2: Pass description and user custom requirements to DALL-E 3
       const finalPromptForDalle = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-      console.log(`[VERCEL OPENAI] Sending prompt to DALL-E 3: ${finalPromptForDalle}`);
+      console.log(`[OPENAI AI] Sending prompt to DALL-E 3: ${finalPromptForDalle}`);
 
       const dalleResponse = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
@@ -453,7 +437,7 @@ export default async function handler(req, res) {
         throw new Error('DALL-E 3 returned no image data.');
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         image: `data:image/png;base64,${base64Image}`,
         isMock: false,
@@ -461,7 +445,7 @@ export default async function handler(req, res) {
       });
 
     } catch (error) {
-      console.error('[VERCEL OPENAI ERROR]', error);
+      console.error('[OPENAI AI ERROR]', error);
       return res.status(500).json({ 
         error: 'OpenAI 이미지 생성 중 오류가 발생했습니다.', 
         details: error.message 
@@ -470,16 +454,15 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Replicate API Mode (flux-kontext-pro or qwen-image-edit-plus)
+  // 2. Replicate API Mode (flux-kontext-pro or qwen-image-edit-plus)
   // -------------------------------------------------------------
-  if (targetModel === 'replicate_flux' || targetModel === 'replicate_qwen') {
+  if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      const modelName = targetModel === 'replicate_qwen' ? 'qwen/qwen-image-edit-plus' : 'black-forest-labs/flux-kontext-pro';
-      console.log(`[VERCEL REPLICATE] Running ${modelName}. Style: ${selectedStyle}, Gender: ${selectedGender}`);
-      console.log(`[VERCEL REPLICATE] Prompt: "${finalPrompt}"`);
+      console.log(`[REPLICATE AI] Running ${ACTIVE_REPLICATE_MODEL}. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[REPLICATE AI] Prompt: "${finalPrompt}"`);
 
       let inputPayload = {};
-      if (targetModel === 'replicate_qwen') {
+      if (ACTIVE_REPLICATE_MODEL === 'qwen/qwen-image-edit-plus') {
         inputPayload = {
           image: [image],
           prompt: finalPrompt,
@@ -501,20 +484,20 @@ export default async function handler(req, res) {
       }
 
       const prediction = await createPredictionWithRetry(
-        modelName,
+        ACTIVE_REPLICATE_MODEL,
         inputPayload,
         replicateToken
       );
-      console.log(`[VERCEL REPLICATE] Prediction created with ID: ${prediction.id}. Polling...`);
+      console.log(`[REPLICATE AI] Prediction created with ID: ${prediction.id}. Polling...`);
 
       const output = await pollReplicatePrediction(prediction.id, replicateToken);
       const resultImageUrl = Array.isArray(output) ? output[0] : output;
 
       if (!resultImageUrl) {
-        throw new Error(`Replicate ${modelName} did not return any output image URL.`);
+        throw new Error('Replicate flux-kontext-pro did not return any output image URL.');
       }
 
-      console.log(`[VERCEL REPLICATE] Generation succeeded. Downloading image from ${resultImageUrl}...`);
+      console.log(`[REPLICATE AI] Generation succeeded. Downloading image from ${resultImageUrl}...`);
 
       const imageResponse = await fetch(resultImageUrl);
       if (!imageResponse.ok) {
@@ -524,7 +507,7 @@ export default async function handler(req, res) {
       const buffer = Buffer.from(arrayBuffer);
       const base64Image = buffer.toString('base64');
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         image: `data:image/png;base64,${base64Image}`,
         isMock: false,
@@ -532,7 +515,7 @@ export default async function handler(req, res) {
       });
 
     } catch (error) {
-      console.error('[VERCEL REPLICATE ERROR]', error);
+      console.error('[REPLICATE AI ERROR]', error);
       return res.status(500).json({ 
         error: 'Replicate 이미지 생성 중 오류가 발생했습니다.', 
         details: error.message 
@@ -541,11 +524,11 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
+  // 2. Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
   // -------------------------------------------------------------
-  if (targetModel === 'gemini_imagen') {
+  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
     try {
-      console.log(`[VERCEL GEMINI] Running 2-stage caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[GEMINI AI] Running 2-stage caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
       // Stage 1: Analyze captured image using Gemini 2.5 Flash
@@ -581,11 +564,11 @@ export default async function handler(req, res) {
 
       const analyzeResult = await analyzeResponse.json();
       const faceDescription = analyzeResult.candidates?.[0]?.content?.parts?.[0]?.text || 'A person';
-      console.log(`[VERCEL GEMINI] Face Analysis: ${faceDescription}`);
+      console.log(`[GEMINI AI] Face Analysis: ${faceDescription}`);
 
       // Stage 2: Pass description to Imagen 4 to paint the caricature
       const finalPromptForGemini = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-      console.log(`[VERCEL GEMINI] Sending prompt to Imagen 4: ${finalPromptForGemini}`);
+      console.log(`[GEMINI AI] Sending prompt to Imagen 4: ${finalPromptForGemini}`);
 
       const imagenResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${geminiKey}`,
@@ -617,7 +600,7 @@ export default async function handler(req, res) {
         throw new Error('Imagen 4 returned no image data.');
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         image: `data:image/jpeg;base64,${imageBytes}`,
         isMock: false,
@@ -625,7 +608,7 @@ export default async function handler(req, res) {
       });
 
     } catch (error) {
-      console.error('[VERCEL GEMINI ERROR]', error);
+      console.error('[GEMINI AI ERROR]', error);
       return res.status(500).json({ 
         error: 'Gemini 이미지 생성 중 오류가 발생했습니다.', 
         details: error.message 
@@ -634,11 +617,11 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Stability AI Mode (Stable Diffusion XL Image-to-Image)
+  // 3. Stability AI Mode (Stable Diffusion XL Image-to-Image)
   // -------------------------------------------------------------
-  if (targetModel === 'stability_sdxl') {
+  if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
     try {
-      console.log(`[VERCEL REAL] Connecting to Stability AI. Style: ${selectedStyle}`);
+      console.log(`[REAL AI] Connecting to Stability AI. Style: ${selectedStyle}`);
       
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
       const imageBuffer = Buffer.from(base64Data, 'base64');
@@ -677,7 +660,7 @@ export default async function handler(req, res) {
       const result = await response.json();
       const generatedBase64 = result.artifacts[0].base64;
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         image: `data:image/jpeg;base64,${generatedBase64}`,
         isMock: false,
@@ -685,7 +668,7 @@ export default async function handler(req, res) {
       });
 
     } catch (error) {
-      console.error('[VERCEL REAL ERROR]', error);
+      console.error('[REAL AI ERROR]', error);
       return res.status(500).json({ 
         error: 'AI 이미지 생성 중 오류가 발생했습니다.', 
         details: error.message 
@@ -694,23 +677,50 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Mock Mode Fallback (Simulated AI Generation)
+  // 4. Mock Mode Fallback (Simulated AI Generation)
   // -------------------------------------------------------------
-  if (targetModel === 'mock') {
-    console.log(`[VERCEL MOCK] Style: ${selectedStyle}, Custom prompt: ${prompt || 'None'}`);
-    
-    // Simulate 3 seconds generation delay
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    
-    const mockImageUrl = `/mock_${selectedStyle}.jpg`;
-    
-    return res.status(200).json({
-      success: true,
-      image: mockImageUrl,
-      isMock: true,
-      promptUsed: finalPrompt
-    });
+  console.log(`[MOCK AI] Style: ${selectedStyle}, Custom prompt: ${prompt || 'None'}`);
+  console.log(`[MOCK AI] Simulating 3-second generation delay...`);
+  
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  
+  const mockImageUrl = `/mock_${selectedStyle}.jpg`;
+  
+  return res.json({
+    success: true,
+    image: mockImageUrl,
+    isMock: true,
+    promptUsed: finalPrompt
+  });
+});
+
+// Fallback to serving SPA index.html for undefined routes in production
+if (fs.existsSync(distPath)) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
+// Start Server
+app.listen(PORT, () => {
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const stabilityKey = process.env.STABILITY_API_KEY;
+  
+  let mode = 'MOCK';
+  if (openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE') {
+    mode = 'OPENAI';
+  } else if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
+    mode = 'REPLICATE';
+  } else if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
+    mode = 'GEMINI';
+  } else if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
+    mode = 'STABILITY';
   }
 
-  return res.status(400).json({ error: `알 수 없는 생성 모델이 선택되었습니다: ${targetModel}` });
-}
+  console.log(`==================================================`);
+  console.log(`  AI Caricature Server is running on port ${PORT}`);
+  console.log(`  Active AI Mode: ${mode}`);
+  console.log(`==================================================`);
+});

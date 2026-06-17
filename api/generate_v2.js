@@ -306,7 +306,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: '허용되지 않는 메서드입니다.' });
   }
 
-  const { image, style, prompt, gender, model } = req.body;
+  const { image, style, prompt, gender } = req.body;
 
   if (!image) {
     return res.status(400).json({ error: '이미지 데이터가 필요합니다.' });
@@ -342,43 +342,10 @@ export default async function handler(req, res) {
   const geminiKey = process.env.GEMINI_API_KEY;
   const stabilityKey = process.env.STABILITY_API_KEY;
 
-  // 1. Determine which model to run based on the request 'model' field
-  // If model is not specified, auto-detect based on available keys
-  let targetModel = model;
-  if (!targetModel) {
-    if (openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE') {
-      targetModel = 'openai_dalle';
-    } else if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
-      targetModel = 'replicate_flux';
-    } else if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
-      targetModel = 'gemini_imagen';
-    } else if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
-      targetModel = 'stability_sdxl';
-    } else {
-      targetModel = 'mock';
-    }
-  }
-
-  // 2. Validate API key availability for the selected model
-  if (targetModel === 'openai_dalle' && (!openaiKey || openaiKey === 'YOUR_OPENAI_API_KEY_HERE')) {
-    return res.status(400).json({ error: 'OpenAI API Key가 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if ((targetModel === 'replicate_flux' || targetModel === 'replicate_qwen') && (!replicateToken || replicateToken === 'YOUR_REPLICATE_API_TOKEN_HERE')) {
-    return res.status(400).json({ error: 'Replicate API Token이 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if (targetModel === 'gemini_imagen' && (!geminiKey || geminiKey === 'YOUR_GEMINI_API_KEY_HERE' || geminiKey.startsWith('AQ.'))) {
-    return res.status(400).json({ error: 'Gemini API Key가 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if (targetModel === 'stability_sdxl' && (!stabilityKey || stabilityKey === 'YOUR_STABILITY_API_KEY_HERE')) {
-    return res.status(400).json({ error: 'Stability AI API Key가 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-
-  // 3. Execute model-specific pipeline
-  
   // -------------------------------------------------------------
-  // OpenAI API Mode (GPT-4o Vision + DALL-E 3 Pipeline)
+  // 1. OpenAI API Mode (GPT-4o Vision + DALL-E 3 Pipeline)
   // -------------------------------------------------------------
-  if (targetModel === 'openai_dalle') {
+  if (openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE') {
     try {
       console.log(`[VERCEL OPENAI] Running GPT-4o + DALL-E 3 caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
@@ -470,16 +437,15 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Replicate API Mode (flux-kontext-pro or qwen-image-edit-plus)
+  // 2. Replicate API Mode (flux-kontext-pro or qwen-image-edit-plus)
   // -------------------------------------------------------------
-  if (targetModel === 'replicate_flux' || targetModel === 'replicate_qwen') {
+  if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     try {
-      const modelName = targetModel === 'replicate_qwen' ? 'qwen/qwen-image-edit-plus' : 'black-forest-labs/flux-kontext-pro';
-      console.log(`[VERCEL REPLICATE] Running ${modelName}. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[VERCEL REPLICATE] Running ${ACTIVE_REPLICATE_MODEL}. Style: ${selectedStyle}, Gender: ${selectedGender}`);
       console.log(`[VERCEL REPLICATE] Prompt: "${finalPrompt}"`);
 
       let inputPayload = {};
-      if (targetModel === 'replicate_qwen') {
+      if (ACTIVE_REPLICATE_MODEL === 'qwen/qwen-image-edit-plus') {
         inputPayload = {
           image: [image],
           prompt: finalPrompt,
@@ -501,7 +467,7 @@ export default async function handler(req, res) {
       }
 
       const prediction = await createPredictionWithRetry(
-        modelName,
+        ACTIVE_REPLICATE_MODEL,
         inputPayload,
         replicateToken
       );
@@ -511,7 +477,7 @@ export default async function handler(req, res) {
       const resultImageUrl = Array.isArray(output) ? output[0] : output;
 
       if (!resultImageUrl) {
-        throw new Error(`Replicate ${modelName} did not return any output image URL.`);
+        throw new Error(`Replicate ${ACTIVE_REPLICATE_MODEL} did not return any output image URL.`);
       }
 
       console.log(`[VERCEL REPLICATE] Generation succeeded. Downloading image from ${resultImageUrl}...`);
@@ -541,9 +507,9 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
+  // 2. Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
   // -------------------------------------------------------------
-  if (targetModel === 'gemini_imagen') {
+  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
     try {
       console.log(`[VERCEL GEMINI] Running 2-stage caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
@@ -634,9 +600,9 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Stability AI Mode (Stable Diffusion XL Image-to-Image)
+  // 3. Stability AI Mode (Stable Diffusion XL Image-to-Image)
   // -------------------------------------------------------------
-  if (targetModel === 'stability_sdxl') {
+  if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
     try {
       console.log(`[VERCEL REAL] Connecting to Stability AI. Style: ${selectedStyle}`);
       
@@ -694,23 +660,19 @@ export default async function handler(req, res) {
   }
 
   // -------------------------------------------------------------
-  // Mock Mode Fallback (Simulated AI Generation)
+  // 4. Mock Mode Fallback (Simulated AI Generation)
   // -------------------------------------------------------------
-  if (targetModel === 'mock') {
-    console.log(`[VERCEL MOCK] Style: ${selectedStyle}, Custom prompt: ${prompt || 'None'}`);
-    
-    // Simulate 3 seconds generation delay
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    
-    const mockImageUrl = `/mock_${selectedStyle}.jpg`;
-    
-    return res.status(200).json({
-      success: true,
-      image: mockImageUrl,
-      isMock: true,
-      promptUsed: finalPrompt
-    });
-  }
-
-  return res.status(400).json({ error: `알 수 없는 생성 모델이 선택되었습니다: ${targetModel}` });
+  console.log(`[VERCEL MOCK] Style: ${selectedStyle}, Custom prompt: ${prompt || 'None'}`);
+  
+  // Simulate 3 seconds generation delay
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  
+  const mockImageUrl = `/mock_${selectedStyle}.jpg`;
+  
+  return res.status(200).json({
+    success: true,
+    image: mockImageUrl,
+    isMock: true,
+    promptUsed: finalPrompt
+  });
 }

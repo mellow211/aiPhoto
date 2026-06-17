@@ -486,32 +486,6 @@ body {
   text-overflow: ellipsis;
 }
 
-.model-selection-container {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.model-select {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
-  padding: 8px 12px;
-  color: var(--text-main);
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  outline: none;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.model-select:focus {
-  border-color: var(--accent-purple);
-  background: #ffffff;
-  box-shadow: 0 0 10px rgba(124, 58, 237, 0.1);
-}
-
 .gender-selection-container {
   display: flex;
   flex-direction: column;
