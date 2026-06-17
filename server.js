@@ -293,19 +293,41 @@ app.post('/api/generate', async (req, res) => {
     try {
       console.log(`[REPLICATE AI] Stage 1: Running gpt-4o (Image-to-Text). Style: ${selectedStyle}, Gender: ${selectedGender}`);
 
-      const visionPrompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
+      const visionPrompt = `Describe the subject in this image. Focus on physical characteristics such as hair style/color, expression, clothing, and gender (${selectedGender}). Keep the description to a single short paragraph, optimized as an image prompt. Do not write any introduction or formatting tags.`;
 
-      // 1. Call gpt-4o to describe the image using retry wrapper
-      const gptPrediction = await createPredictionWithRetry(
-        'openai/gpt-4o',
-        { prompt: visionPrompt, image_input: [image] },
-        replicateToken
-      );
-      console.log(`[REPLICATE AI] gpt-4o prediction created with ID: ${gptPrediction.id}. Polling...`);
-      
-      const gptOutput = await pollReplicatePrediction(gptPrediction.id, replicateToken);
-      const faceDescription = Array.isArray(gptOutput) ? gptOutput.join('') : gptOutput;
-      console.log(`[REPLICATE AI] gpt-4o Face Analysis description: "${faceDescription}"`);
+      let faceDescription = '';
+      try {
+        // 1. Call gpt-4o to describe the image using retry wrapper
+        const gptPrediction = await createPredictionWithRetry(
+          'openai/gpt-4o',
+          { prompt: visionPrompt, image_input: [image] },
+          replicateToken
+        );
+        console.log(`[REPLICATE AI] gpt-4o prediction created with ID: ${gptPrediction.id}. Polling...`);
+        
+        const gptOutput = await pollReplicatePrediction(gptPrediction.id, replicateToken);
+        const description = Array.isArray(gptOutput) ? gptOutput.join('') : gptOutput;
+        
+        // Check if gpt-4o refused
+        if (description && (description.toLowerCase().includes("sorry") || description.toLowerCase().includes("can't help") || description.toLowerCase().includes("cannot help") || description.toLowerCase().includes("policies") || description.length < 15)) {
+          throw new Error("gpt-4o safety refusal triggered.");
+        }
+        faceDescription = description;
+        console.log(`[REPLICATE AI] gpt-4o Face Analysis description: "${faceDescription}"`);
+      } catch (gptError) {
+        console.warn(`[REPLICATE AI] gpt-4o failed or refused. Falling back to LLaVA. Error:`, gptError.message);
+        
+        const llavaPrompt = `Describe the person in this image. Write their hair style/color, expression, clothing, and gender. Keep the description to a single paragraph. Do not describe the background.`;
+        const llavaPrediction = await createPredictionWithRetry(
+          '80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb',
+          { image: image, prompt: llavaPrompt },
+          replicateToken
+        );
+        console.log(`[REPLICATE AI] Fallback LLaVA prediction created with ID: ${llavaPrediction.id}. Polling...`);
+        const llavaOutput = await pollReplicatePrediction(llavaPrediction.id, replicateToken);
+        faceDescription = Array.isArray(llavaOutput) ? llavaOutput.join('') : llavaOutput;
+        console.log(`[REPLICATE AI] Fallback LLaVA Face Analysis description: "${faceDescription}"`);
+      }
 
       // 2. Call gpt-image-2 to generate the caricature
       console.log(`[REPLICATE AI] Stage 2: Running gpt-image-2 (Text-to-Image).`);
