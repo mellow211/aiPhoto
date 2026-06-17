@@ -332,7 +332,7 @@ app.post('/api/generate', async (req, res) => {
       // 2. Call gpt-image-2 to generate the caricature
       console.log(`[REPLICATE AI] Stage 2: Running gpt-image-2 (Text-to-Image).`);
       
-      const finalPromptForGPT = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      const finalPromptForGPT = `${stylePrompt}, a caricature of the person in the input image: ${faceDescription}. ${translatedPrompt || ''}`;
       console.log(`[REPLICATE AI] Sending prompt to gpt-image-2: "${finalPromptForGPT}"`);
 
       // 2. Call gpt-image-2 using retry wrapper
@@ -340,7 +340,8 @@ app.post('/api/generate', async (req, res) => {
         'openai/gpt-image-2',
         {
           prompt: finalPromptForGPT,
-          aspect_ratio: '1:1'
+          aspect_ratio: '1:1',
+          input_images: [image]
         },
         replicateToken
       );
