@@ -102,43 +102,46 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>성별과 생성하고 싶은 아트를 선택하고, 추가 요구사항을 입력하세요.</p>
         </div>
 
-        {/* AI Model Selection */}
-        <div className="model-selection-container">
-          <label className="prompt-label">AI 생성 모델 선택</label>
-          <select 
-            className="model-select"
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-          >
-            <option value="replicate_flux">🎨 Replicate: FLUX Caricature (추천)</option>
-            <option value="replicate_qwen">👾 Replicate: Qwen Image Edit (도트 강화)</option>
-            <option value="openai_dalle">🤖 OpenAI: GPT-4o + DALL-E 3</option>
-            <option value="gemini_imagen">✨ Gemini: 2.5 Flash + Imagen 4</option>
-            <option value="stability_sdxl">🌌 Stability AI: SDXL Image-to-Image</option>
-            <option value="mock">🃏 Mock Mode (테스트용 시뮬레이터)</option>
-          </select>
-        </div>
+        {/* AI Model & Gender Selection Row */}
+        <div className="style-flex-row">
+          {/* AI Model Selection */}
+          <div className="model-selection-container">
+            <label className="prompt-label">AI 생성 모델 선택</label>
+            <select 
+              className="model-select"
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+            >
+              <option value="replicate_flux">🎨 Replicate: FLUX Caricature (추천)</option>
+              <option value="replicate_qwen">👾 Replicate: Qwen Image Edit (도트 강화)</option>
+              <option value="openai_dalle">🤖 OpenAI: GPT-4o + DALL-E 3</option>
+              <option value="gemini_imagen">✨ Gemini: 2.5 Flash + Imagen 4</option>
+              <option value="stability_sdxl">🌌 Stability AI: SDXL Image-to-Image</option>
+              <option value="mock">🃏 Mock Mode (테스트용 시뮬레이터)</option>
+            </select>
+          </div>
 
-        {/* Gender Selection */}
-        <div className="gender-selection-container">
-          <label className="prompt-label">성별 선택 (필수)</label>
-          <div className="gender-buttons">
-            <button 
-              type="button"
-              className={`gender-button ${gender === 'male' ? 'selected' : ''}`}
-              onClick={() => setGender('male')}
-            >
-              <span>🙋‍♂️</span>
-              <span>남성 (Male)</span>
-            </button>
-            <button 
-              type="button"
-              className={`gender-button ${gender === 'female' ? 'selected' : ''}`}
-              onClick={() => setGender('female')}
-            >
-              <span>🙋‍♀️</span>
-              <span>여성 (Female)</span>
-            </button>
+          {/* Gender Selection */}
+          <div className="gender-selection-container">
+            <label className="prompt-label">성별 선택 (필수)</label>
+            <div className="gender-buttons">
+              <button 
+                type="button"
+                className={`gender-button ${gender === 'male' ? 'selected' : ''}`}
+                onClick={() => setGender('male')}
+              >
+                <span>🙋‍♂️</span>
+                <span>남성 (Male)</span>
+              </button>
+              <button 
+                type="button"
+                className={`gender-button ${gender === 'female' ? 'selected' : ''}`}
+                onClick={() => setGender('female')}
+              >
+                <span>🙋‍♀️</span>
+                <span>여성 (Female)</span>
+              </button>
+            </div>
           </div>
         </div>
 

@@ -178,7 +178,7 @@ async function expandUserPrompt(promptText) {
   const geminiKey = process.env.GEMINI_API_KEY;
 
   // 1. Try Gemini
-  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
+  if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
     try {
       console.log(`[PROMPT EXPANSION] Trying Gemini for: "${trimmed}"`);
       const expanded = await expandPromptWithGemini(trimmed, geminiKey);
@@ -228,11 +228,11 @@ async function expandUserPrompt(promptText) {
 // Analyze image utilizing Replicate VLM models as fallback for GPT-4o vision or Gemini Flash
 async function analyzeImageWithReplicateVLM(image, gender, replicateToken) {
   try {
-    console.log(`[REPLICATE VLM] Analyzing face using meta/llama-3.2-11b-vision-instruct`);
+    console.log(`[REPLICATE VLM] Analyzing face using yorickvp/llava-v1.6-mistral-7b`);
     const prompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
     
     const prediction = await createPredictionWithRetry(
-      'meta/llama-3.2-11b-vision-instruct',
+      '19be067b589d0c46689ffa7cc3ff321447a441986a7694c01225973c2eafc874',
       {
         image: image,
         prompt: prompt,
@@ -245,26 +245,8 @@ async function analyzeImageWithReplicateVLM(image, gender, replicateToken) {
     if (!resultText) throw new Error('Replicate VLM returned empty description');
     return resultText.trim();
   } catch (error) {
-    console.warn(`[REPLICATE VLM] Llama-3.2 vision failed, falling back to yorickvp/llava-13b:`, error.message);
-    try {
-      const prompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph.`;
-      const prediction = await createPredictionWithRetry(
-        'yorickvp/llava-13b',
-        {
-          image: image,
-          prompt: prompt,
-          max_tokens: 300
-        },
-        replicateToken
-      );
-      const output = await pollReplicatePrediction(prediction.id, replicateToken);
-      const resultText = Array.isArray(output) ? output.join('') : output;
-      if (!resultText) throw new Error('Replicate Llava returned empty description');
-      return resultText.trim();
-    } catch (e2) {
-      console.error(`[REPLICATE VLM] Final fallback failed:`, e2.message);
-      return `A portrait of a ${gender === 'female' ? 'female' : 'male'} user with friendly expression`;
-    }
+    console.error(`[REPLICATE VLM] LLaVA analysis failed:`, error.message);
+    return `A portrait of a ${gender === 'female' ? 'female' : 'male'} user with friendly expression`;
   }
 }
 
@@ -410,7 +392,7 @@ app.post('/api/generate', async (req, res) => {
       targetModel = 'openai_dalle';
     } else if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
       targetModel = 'replicate_flux';
-    } else if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
+    } else if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
       targetModel = 'gemini_imagen';
     } else if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
       targetModel = 'stability_sdxl';
@@ -422,7 +404,7 @@ app.post('/api/generate', async (req, res) => {
   // 2. Validate API key availability for the selected model or check for Replicate Fallback
   const hasOpenAI = openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE';
   const hasReplicate = replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE';
-  const hasGemini = geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.');
+  const hasGemini = geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE';
   const hasStability = stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE';
 
   if (targetModel === 'openai_dalle' && !hasOpenAI && !hasReplicate) {
@@ -931,7 +913,7 @@ app.listen(PORT, () => {
     mode = 'OPENAI';
   } else if (replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE') {
     mode = 'REPLICATE';
-  } else if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE' && !geminiKey.startsWith('AQ.')) {
+  } else if (geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
     mode = 'GEMINI';
   } else if (stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE') {
     mode = 'STABILITY';
