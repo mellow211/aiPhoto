@@ -350,13 +350,13 @@ body {
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.03);
-  background: #f1f5f9;
+  background: #0f172a;
 }
 
 .style-photo-preview img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .style-options-panel {
@@ -903,6 +903,16 @@ body {
   .style-layout {
     grid-template-columns: 1fr !important;
     gap: 20px !important;
+  }
+
+  .style-flex-row {
+    grid-template-columns: 1fr !important; /* Stack model selection and gender buttons vertically */
+    gap: 16px !important;
+  }
+
+  .model-select {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .style-photo-preview {
