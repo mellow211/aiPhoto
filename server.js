@@ -274,26 +274,32 @@ async function analyzeImageWithReplicateVLM(image, gender, replicateToken) {
 async function analyzeImageWithReplicateGPT4o(image, gender, replicateToken) {
   try {
     console.log(`[REPLICATE GPT-4o] Analyzing face using openai/gpt-4o on Replicate`);
-    const prompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
+    const prompt = `Describe the hair style, clothing, and facial expression of the subject in this photo for illustration purposes. Do not identify the person. Be brief. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}.`;
     
     const prediction = await createPredictionWithRetry(
       'openai/gpt-4o',
       {
         prompt: prompt,
         image_input: [image],
-        max_completion_tokens: 300
+        max_completion_tokens: 150
       },
       replicateToken
     );
-    // Limit face description vision model polling to 12 seconds to prevent Vercel 60s timeout
-    const output = await pollReplicatePrediction(prediction.id, replicateToken, 12);
-    const resultText = Array.isArray(output) ? output.join('') : output;
+    // Limit face description vision model polling to 8 seconds to prevent Vercel 60s timeout
+    const output = await pollReplicatePrediction(prediction.id, replicateToken, 8);
+    let resultText = Array.isArray(output) ? output.join('') : output;
     if (!resultText) throw new Error('Replicate GPT-4o returned empty description');
+
+    const lowerDesc = resultText.toLowerCase();
+    if (lowerDesc.includes("i'm sorry") || lowerDesc.includes("can't help") || lowerDesc.includes("cannot help") || lowerDesc.includes("copyright") || lowerDesc.includes("ethical") || lowerDesc.includes("guidelines")) {
+      console.warn(`[VLM REFUSAL DETECTED] GPT-4o refused to analyze face. Using safe default description.`);
+      return `A portrait of a ${gender === 'female' ? 'female' : 'male'} user with friendly expression`;
+    }
+
     return resultText.trim();
   } catch (error) {
     console.error(`[REPLICATE GPT-4o] GPT-4o analysis failed or timed out:`, error.message);
-    // Fallback to LLaVA if GPT-4o fails
-    return analyzeImageWithReplicateVLM(image, gender, replicateToken);
+    return `A portrait of a ${gender === 'female' ? 'female' : 'male'} user with friendly expression`;
   }
 }
 
@@ -301,26 +307,32 @@ async function analyzeImageWithReplicateGPT4o(image, gender, replicateToken) {
 async function analyzeImageWithReplicateGemini(image, gender, replicateToken) {
   try {
     console.log(`[REPLICATE GEMINI] Analyzing face using google/gemini-2.5-flash on Replicate`);
-    const prompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
+    const prompt = `Describe the hair style, clothing, and facial expression of the subject in this photo for illustration purposes. Do not identify the person. Be brief. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}.`;
     
     const prediction = await createPredictionWithRetry(
       'google/gemini-2.5-flash',
       {
         prompt: prompt,
         images: [image],
-        max_output_tokens: 300
+        max_output_tokens: 150
       },
       replicateToken
     );
-    // Limit face description vision model polling to 12 seconds to prevent Vercel 60s timeout
-    const output = await pollReplicatePrediction(prediction.id, replicateToken, 12);
-    const resultText = Array.isArray(output) ? output.join('') : output;
+    // Limit face description vision model polling to 8 seconds to prevent Vercel 60s timeout
+    const output = await pollReplicatePrediction(prediction.id, replicateToken, 8);
+    let resultText = Array.isArray(output) ? output.join('') : output;
     if (!resultText) throw new Error('Replicate Gemini returned empty description');
+
+    const lowerDesc = resultText.toLowerCase();
+    if (lowerDesc.includes("i'm sorry") || lowerDesc.includes("can't help") || lowerDesc.includes("cannot help") || lowerDesc.includes("copyright") || lowerDesc.includes("ethical") || lowerDesc.includes("guidelines")) {
+      console.warn(`[VLM REFUSAL DETECTED] Gemini refused to analyze face. Using safe default description.`);
+      return `A portrait of a ${gender === 'female' ? 'female' : 'male'} user with friendly expression`;
+    }
+
     return resultText.trim();
   } catch (error) {
     console.error(`[REPLICATE GEMINI] Gemini analysis failed or timed out:`, error.message);
-    // Fallback to LLaVA if Gemini fails
-    return analyzeImageWithReplicateVLM(image, gender, replicateToken);
+    return `A portrait of a ${gender === 'female' ? 'female' : 'male'} user with friendly expression`;
   }
 }
 
@@ -330,7 +342,7 @@ async function pollReplicatePrediction(predictionId, replicateToken, maxSeconds 
   let output = null;
   
   const startTime = Date.now();
-  let delay = 2000; // Start with 2 seconds
+  let delay = 1500; // Start with 1.5 seconds
 
   while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled') {
     const elapsedSeconds = (Date.now() - startTime) / 1000;
@@ -341,8 +353,8 @@ async function pollReplicatePrediction(predictionId, replicateToken, maxSeconds 
     }
 
     await new Promise(resolve => setTimeout(resolve, delay));
-    // Increase delay progressively up to 8 seconds
-    delay = Math.min(delay + 1500, 8000);
+    // Increase delay progressively up to 5 seconds
+    delay = Math.min(delay + 1000, 5000);
 
     const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
       headers: {
