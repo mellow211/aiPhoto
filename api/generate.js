@@ -840,7 +840,7 @@ export default async function handler(req, res) {
         console.log(`[STABILITY AI - VERCEL REPLICATE FALLBACK] Running Replicate Fallback for Stability SDXL`);
         
         const prediction = await createPredictionWithRetry(
-          'stability-ai/sdxl',
+          '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
           {
             image: image,
             prompt: finalPrompt,
