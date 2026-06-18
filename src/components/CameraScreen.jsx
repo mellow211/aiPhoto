@@ -81,20 +81,41 @@ export default function CameraScreen({ onCapture, onBack }) {
   };
 
   // Convert uploaded image file to base64 URL
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCapturedImage(reader.result); // base64 string
-        
-        // Stop current streams immediately if running
-        if (stream) {
-          stream.getTracks().forEach((track) => track.stop());
+      const limit = 2 * 1024 * 1024; // 2MB
+      if (file.size > limit) {
+        try {
+          console.log(`[FILE UPLOAD] File size (${(file.size / (1024 * 1024)).toFixed(2)}MB) exceeds 2MB. Compressing...`);
+          const compressedBase64 = await compressImageToBase64(file);
+          setCapturedImage(compressedBase64);
+          
+          // Stop current streams immediately if running
+          if (stream) {
+            stream.getTracks().forEach((track) => track.stop());
+          }
+        } catch (err) {
+          console.error('[COMPRESSION ERROR]', err);
+          readFileDirectly(file);
         }
-      };
-      reader.readAsDataURL(file);
+      } else {
+        readFileDirectly(file);
+      }
     }
+  };
+
+  const readFileDirectly = (file) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCapturedImage(reader.result); // base64 string
+      
+      // Stop current streams immediately if running
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRetake = () => {
@@ -246,4 +267,115 @@ export default function CameraScreen({ onCapture, onBack }) {
       </div>
     </div>
   );
+}
+
+// EXIF orientation reader & compressor helper functions
+function getExifOrientation(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const view = new DataView(e.target.result);
+      if (view.byteLength < 2 || view.getUint16(0, false) !== 0xFFD8) {
+        resolve(-2); // Not a JPEG
+        return;
+      }
+      const length = view.byteLength;
+      let offset = 2;
+      while (offset < length) {
+        if (offset + 2 > length) break;
+        const marker = view.getUint16(offset, false);
+        offset += 2;
+        if (marker === 0xFFE1) {
+          if (offset + 6 > length) break;
+          if (view.getUint32(offset, false) !== 0x45786966) {
+            resolve(-1);
+            return;
+          }
+          offset += 6;
+          const little = view.getUint16(offset, false) === 0x4949;
+          offset += 2;
+          if (offset + 2 > length) break;
+          const tags = view.getUint16(offset, little);
+          offset += 2;
+          for (let i = 0; i < tags; i++) {
+            const tagOffset = offset + i * 12;
+            if (tagOffset + 12 > length) break;
+            if (view.getUint16(tagOffset, little) === 0x0112) {
+              resolve(view.getUint16(tagOffset + 8, little));
+              return;
+            }
+          }
+        } else if ((marker & 0xFF00) === 0xFF00) {
+          if (offset + 2 > length) break;
+          const markerLength = view.getUint16(offset, false);
+          offset += markerLength;
+        } else {
+          break;
+        }
+      }
+      resolve(-1);
+    };
+    reader.readAsArrayBuffer(file.slice(0, 65536));
+  });
+}
+
+async function compressImageToBase64(file, maxWidth = 1024, maxHeight = 1024, quality = 0.8) {
+  const orientation = await getExifOrientation(file);
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const isRotated = orientation === 5 || orientation === 6 || orientation === 7 || orientation === 8;
+        const targetWidth = isRotated ? img.height : img.width;
+        const targetHeight = isRotated ? img.width : img.height;
+
+        let newWidth = targetWidth;
+        let newHeight = targetHeight;
+
+        if (targetWidth > targetHeight) {
+          if (targetWidth > maxWidth) {
+            newHeight = Math.round((targetHeight * maxWidth) / targetWidth);
+            newWidth = maxWidth;
+          }
+        } else {
+          if (targetHeight > maxHeight) {
+            newWidth = Math.round((targetWidth * maxHeight) / targetHeight);
+            newHeight = maxHeight;
+          }
+        }
+
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        const ctx = canvas.getContext('2d');
+
+        ctx.save();
+        if (orientation === 3) {
+          ctx.translate(newWidth, newHeight);
+          ctx.rotate(Math.PI);
+          ctx.drawImage(img, 0, 0, newWidth, newHeight);
+        } else if (orientation === 6) {
+          ctx.translate(newWidth, 0);
+          ctx.rotate(90 * Math.PI / 180);
+          ctx.drawImage(img, 0, 0, newHeight, newWidth);
+        } else if (orientation === 8) {
+          ctx.translate(0, newHeight);
+          ctx.rotate(270 * Math.PI / 180);
+          ctx.drawImage(img, 0, 0, newHeight, newWidth);
+        } else {
+          ctx.drawImage(img, 0, 0, newWidth, newHeight);
+        }
+        ctx.restore();
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
 }
