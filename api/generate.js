@@ -474,28 +474,26 @@ export default async function handler(req, res) {
   // -------------------------------------------------------------
   if (targetModel === 'openai_dalle') {
     try {
-      console.log(`[REPLICATE GPT-4o PIPELINE] Running Replicate GPT-4o + FLUX. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[REPLICATE GPT-4o PIPELINE] Running Replicate GPT-4o + GPT Image 2. Style: ${selectedStyle}, Gender: ${selectedGender}`);
       const faceDescription = await analyzeImageWithReplicateGPT4o(image, selectedGender, replicateToken);
       console.log(`[REPLICATE GPT-4o PIPELINE] Face Analysis: ${faceDescription}`);
 
-      const finalPromptForFlux = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-      console.log(`[REPLICATE GPT-4o PIPELINE] Sending prompt to FLUX: ${finalPromptForFlux}`);
+      const finalPromptForGen = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      console.log(`[REPLICATE GPT-4o PIPELINE] Sending prompt to GPT Image 2: ${finalPromptForGen}`);
 
       const prediction = await createPredictionWithRetry(
-        'black-forest-labs/flux-kontext-pro',
+        'openai/gpt-image-2',
         {
-          input_image: image,
-          prompt: finalPromptForFlux,
-          aspect_ratio: 'match_input_image',
-          output_format: 'png',
-          safety_tolerance: 2,
-          prompt_upsampling: false
+          input_images: [image],
+          prompt: finalPromptForGen,
+          aspect_ratio: '1:1',
+          output_format: 'png'
         },
         replicateToken
       );
       const output = await pollReplicatePrediction(prediction.id, replicateToken);
       const resultImageUrl = Array.isArray(output) ? output[0] : output;
-      if (!resultImageUrl) throw new Error('FLUX model returned no image URL');
+      if (!resultImageUrl) throw new Error('GPT Image 2 model returned no image URL');
 
       const imageResponse = await fetch(resultImageUrl);
       const arrayBuffer = await imageResponse.arrayBuffer();
@@ -505,12 +503,12 @@ export default async function handler(req, res) {
         success: true,
         image: `data:image/png;base64,${base64Image}`,
         isMock: false,
-        promptUsed: finalPromptForFlux
+        promptUsed: finalPromptForGen
       });
     } catch (error) {
       console.error('[REPLICATE GPT-4o PIPELINE ERROR]', error);
       return res.status(500).json({ 
-        error: 'Replicate GPT-4o 파이프라인 생성 중 오류가 발생했습니다.', 
+        error: 'Replicate GPT-4o + GPT Image 2 파이프라인 생성 중 오류가 발생했습니다.', 
         details: error.message 
       });
     }
@@ -592,28 +590,26 @@ export default async function handler(req, res) {
   // -------------------------------------------------------------
   if (targetModel === 'gemini_imagen') {
     try {
-      console.log(`[REPLICATE GEMINI PIPELINE] Running Replicate Gemini + FLUX. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      console.log(`[REPLICATE GEMINI PIPELINE] Running Replicate Gemini + Nano Banana 2. Style: ${selectedStyle}, Gender: ${selectedGender}`);
       const faceDescription = await analyzeImageWithReplicateGemini(image, selectedGender, replicateToken);
       console.log(`[REPLICATE GEMINI PIPELINE] Face Analysis: ${faceDescription}`);
 
-      const finalPromptForFlux = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-      console.log(`[REPLICATE GEMINI PIPELINE] Sending prompt to FLUX: ${finalPromptForFlux}`);
+      const finalPromptForGen = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      console.log(`[REPLICATE GEMINI PIPELINE] Sending prompt to Nano Banana 2: ${finalPromptForGen}`);
 
       const prediction = await createPredictionWithRetry(
-        'black-forest-labs/flux-kontext-pro',
+        'google/nano-banana-2',
         {
-          input_image: image,
-          prompt: finalPromptForFlux,
-          aspect_ratio: 'match_input_image',
-          output_format: 'png',
-          safety_tolerance: 2,
-          prompt_upsampling: false
+          image_input: [image],
+          prompt: finalPromptForGen,
+          aspect_ratio: '1:1',
+          output_format: 'png'
         },
         replicateToken
       );
       const output = await pollReplicatePrediction(prediction.id, replicateToken);
       const resultImageUrl = Array.isArray(output) ? output[0] : output;
-      if (!resultImageUrl) throw new Error('FLUX model returned no image URL');
+      if (!resultImageUrl) throw new Error('Nano Banana 2 model returned no image URL');
 
       const imageResponse = await fetch(resultImageUrl);
       const arrayBuffer = await imageResponse.arrayBuffer();
@@ -623,12 +619,12 @@ export default async function handler(req, res) {
         success: true,
         image: `data:image/png;base64,${base64Image}`,
         isMock: false,
-        promptUsed: finalPromptForFlux
+        promptUsed: finalPromptForGen
       });
     } catch (error) {
       console.error('[REPLICATE GEMINI PIPELINE ERROR]', error);
       return res.status(500).json({ 
-        error: 'Replicate Gemini 파이프라인 생성 중 오류가 발생했습니다.', 
+        error: 'Replicate Gemini + Nano Banana 2 파이프라인 생성 중 오류가 발생했습니다.', 
         details: error.message 
       });
     }

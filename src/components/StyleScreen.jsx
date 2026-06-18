@@ -114,8 +114,8 @@ export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
             >
               <option value="replicate_flux">🎨 Replicate: FLUX Caricature (추천)</option>
               <option value="replicate_qwen">👾 Replicate: Qwen Image Edit (도트 강화)</option>
-              <option value="openai_dalle">🤖 Replicate: OpenAI GPT-4o + FLUX</option>
-              <option value="gemini_imagen">✨ Replicate: Gemini 2.5 Flash + FLUX</option>
+              <option value="openai_dalle">🤖 Replicate: OpenAI GPT Image 2</option>
+              <option value="gemini_imagen">✨ Replicate: Google Nano Banana 2</option>
             </select>
           </div>
 
