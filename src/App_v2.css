@@ -819,7 +819,7 @@ body {
 /* -------------------------------------------------------------
    Responsive Mobile & Portrait Layout Support
    ------------------------------------------------------------- */
-@media (max-width: 850px) or (max-aspect-ratio: 1.1/1) {
+@media (max-width: 850px), (max-aspect-ratio: 1.1/1) {
   /* Allow the main container and content wrapper to scroll vertically */
   .app-container {
     overflow-y: auto !important;
@@ -924,18 +924,18 @@ body {
   }
 
   .style-carousel-track .style-item-card {
-    flex: 0 0 100% !important; /* Stack styles in 1 column on narrow screens */
+    flex: 0 0 calc((100% - 12px) / 2) !important; /* Dual column for mobile phones */
   }
 
   @media (min-width: 480px) {
     .style-carousel-track .style-item-card {
-      flex: 0 0 calc((100% - 12px) / 2) !important; /* Dual column for portrait tablets */
+      flex: 0 0 calc((100% - 24px) / 3) !important; /* Three columns for portrait tablets */
     }
   }
 
   @media (min-width: 851px) {
     .style-carousel-track .style-item-card {
-      flex: 0 0 calc((100% - 24px) / 3) !important;
+      flex: 0 0 calc((100% - 36px) / 4) !important; /* Four columns on larger portrait viewports */
     }
   }
 
