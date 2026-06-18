@@ -270,6 +270,60 @@ async function analyzeImageWithReplicateVLM(image, gender, replicateToken) {
   }
 }
 
+// Analyze image utilizing openai/gpt-4o on Replicate
+async function analyzeImageWithReplicateGPT4o(image, gender, replicateToken) {
+  try {
+    console.log(`[REPLICATE GPT-4o] Analyzing face using openai/gpt-4o on Replicate`);
+    const prompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
+    
+    const prediction = await createPredictionWithRetry(
+      'openai/gpt-4o',
+      {
+        prompt: prompt,
+        image_input: [image],
+        max_completion_tokens: 300
+      },
+      replicateToken
+    );
+    // Limit face description vision model polling to 12 seconds to prevent Vercel 60s timeout
+    const output = await pollReplicatePrediction(prediction.id, replicateToken, 12);
+    const resultText = Array.isArray(output) ? output.join('') : output;
+    if (!resultText) throw new Error('Replicate GPT-4o returned empty description');
+    return resultText.trim();
+  } catch (error) {
+    console.error(`[REPLICATE GPT-4o] GPT-4o analysis failed or timed out:`, error.message);
+    // Fallback to LLaVA if GPT-4o fails
+    return analyzeImageWithReplicateVLM(image, gender, replicateToken);
+  }
+}
+
+// Analyze image utilizing google/gemini-2.5-flash on Replicate
+async function analyzeImageWithReplicateGemini(image, gender, replicateToken) {
+  try {
+    console.log(`[REPLICATE GEMINI] Analyzing face using google/gemini-2.5-flash on Replicate`);
+    const prompt = `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${gender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`;
+    
+    const prediction = await createPredictionWithRetry(
+      'google/gemini-2.5-flash',
+      {
+        prompt: prompt,
+        images: [image],
+        max_output_tokens: 300
+      },
+      replicateToken
+    );
+    // Limit face description vision model polling to 12 seconds to prevent Vercel 60s timeout
+    const output = await pollReplicatePrediction(prediction.id, replicateToken, 12);
+    const resultText = Array.isArray(output) ? output.join('') : output;
+    if (!resultText) throw new Error('Replicate Gemini returned empty description');
+    return resultText.trim();
+  } catch (error) {
+    console.error(`[REPLICATE GEMINI] Gemini analysis failed or timed out:`, error.message);
+    // Fallback to LLaVA if Gemini fails
+    return analyzeImageWithReplicateVLM(image, gender, replicateToken);
+  }
+}
+
 // Polling helper for Replicate predictions with customizable timeout limit (in seconds)
 async function pollReplicatePrediction(predictionId, replicateToken, maxSeconds = 120) {
   let status = 'starting';
@@ -423,23 +477,11 @@ app.post('/api/generate', async (req, res) => {
     }
   }
 
-  // 2. Validate API key availability for the selected model or check for Replicate Fallback
-  const hasOpenAI = openaiKey && openaiKey !== 'YOUR_OPENAI_API_KEY_HERE';
+  // 2. Validate Replicate API Token since all models are routed via Replicate
   const hasReplicate = replicateToken && replicateToken !== 'YOUR_REPLICATE_API_TOKEN_HERE';
-  const hasGemini = geminiKey && geminiKey !== 'YOUR_GEMINI_API_KEY_HERE';
-  const hasStability = stabilityKey && stabilityKey !== 'YOUR_STABILITY_API_KEY_HERE';
 
-  if (targetModel === 'openai_dalle' && !hasOpenAI && !hasReplicate) {
-    return res.status(400).json({ error: 'OpenAI API Key 혹은 Replicate Token이 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if ((targetModel === 'replicate_flux' || targetModel === 'replicate_qwen') && !hasReplicate) {
+  if (!hasReplicate) {
     return res.status(400).json({ error: 'Replicate API Token이 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if (targetModel === 'gemini_imagen' && !hasGemini && !hasReplicate) {
-    return res.status(400).json({ error: 'Gemini API Key 혹은 Replicate Token이 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
-  }
-  if (targetModel === 'stability_sdxl' && !hasStability && !hasReplicate) {
-    return res.status(400).json({ error: 'Stability AI API Key 혹은 Replicate Token이 백엔드 환경 변수에 설정되지 않았습니다. .env 파일을 확인해 주세요.' });
   }
 
   // 3. Execute model-specific pipeline
@@ -448,138 +490,46 @@ app.post('/api/generate', async (req, res) => {
   // OpenAI API Mode (GPT-4o Vision + DALL-E 3 Pipeline)
   // -------------------------------------------------------------
   if (targetModel === 'openai_dalle') {
-    if (hasOpenAI) {
-      try {
-        console.log(`[OPENAI AI] Running GPT-4o + DALL-E 3 caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
-        const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-        const mimeType = image.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
+    try {
+      console.log(`[REPLICATE GPT-4o PIPELINE] Running Replicate GPT-4o + FLUX. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      const faceDescription = await analyzeImageWithReplicateGPT4o(image, selectedGender, replicateToken);
+      console.log(`[REPLICATE GPT-4o PIPELINE] Face Analysis: ${faceDescription}`);
 
-        // Stage 1: Analyze captured image using GPT-4o Vision
-        const visionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o',
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. DO NOT describe the background or surroundings. Output ONLY the description of the person in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`
-                  },
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: `data:${mimeType};base64,${base64Data}`
-                    }
-                  }
-                ]
-              }
-            ],
-            max_tokens: 300
-          })
-        });
+      const finalPromptForFlux = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      console.log(`[REPLICATE GPT-4o PIPELINE] Sending prompt to FLUX: ${finalPromptForFlux}`);
 
-        if (!visionResponse.ok) {
-          const errText = await visionResponse.text();
-          throw new Error(`OpenAI GPT-4o vision analysis failed: ${errText}`);
-        }
+      const prediction = await createPredictionWithRetry(
+        'black-forest-labs/flux-kontext-pro',
+        {
+          input_image: image,
+          prompt: finalPromptForFlux,
+          aspect_ratio: 'match_input_image',
+          output_format: 'png',
+          safety_tolerance: 2,
+          prompt_upsampling: false
+        },
+        replicateToken
+      );
+      const output = await pollReplicatePrediction(prediction.id, replicateToken);
+      const resultImageUrl = Array.isArray(output) ? output[0] : output;
+      if (!resultImageUrl) throw new Error('FLUX model returned no image URL');
 
-        const visionData = await visionResponse.json();
-        const faceDescription = visionData.choices?.[0]?.message?.content || 'A person';
-        console.log(`[OPENAI AI] Face Analysis: ${faceDescription}`);
+      const imageResponse = await fetch(resultImageUrl);
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
-        // Stage 2: Pass description and user custom requirements to DALL-E 3
-        const finalPromptForDalle = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-        console.log(`[OPENAI AI] Sending prompt to DALL-E 3: ${finalPromptForDalle}`);
-
-        const dalleResponse = await fetch('https://api.openai.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'dall-e-3',
-            prompt: finalPromptForDalle,
-            n: 1,
-            size: '1024x1024',
-            response_format: 'b64_json'
-          })
-        });
-
-        if (!dalleResponse.ok) {
-          const errText = await dalleResponse.text();
-          throw new Error(`OpenAI DALL-E 3 failed: ${errText}`);
-        }
-
-        const dalleData = await dalleResponse.json();
-        const base64Image = dalleData.data?.[0]?.b64_json;
-        if (!base64Image) {
-          throw new Error('DALL-E 3 returned no image data.');
-        }
-
-        return res.json({
-          success: true,
-          image: `data:image/png;base64,${base64Image}`,
-          isMock: false,
-          promptUsed: finalPromptForDalle
-        });
-
-      } catch (error) {
-        console.error('[OPENAI AI ERROR]', error);
-        return res.status(500).json({ 
-          error: 'OpenAI 이미지 생성 중 오류가 발생했습니다.', 
-          details: error.message 
-        });
-      }
-    } else {
-      // Replicate Fallback (Llama 3.2 Vision VLM + Replicate FLUX)
-      try {
-        console.log(`[OPENAI AI - REPLICATE FALLBACK] Running Replicate Fallback for GPT-4o + DALL-E 3`);
-        const faceDescription = await analyzeImageWithReplicateVLM(image, selectedGender, replicateToken);
-        console.log(`[OPENAI AI - REPLICATE FALLBACK] Face Analysis: ${faceDescription}`);
-
-        const finalPromptForFlux = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-        console.log(`[OPENAI AI - REPLICATE FALLBACK] Sending prompt to FLUX: ${finalPromptForFlux}`);
-
-        const prediction = await createPredictionWithRetry(
-          'black-forest-labs/flux-kontext-pro',
-          {
-            input_image: image,
-            prompt: finalPromptForFlux,
-            aspect_ratio: 'match_input_image',
-            output_format: 'png',
-            safety_tolerance: 2,
-            prompt_upsampling: false
-          },
-          replicateToken
-        );
-        const output = await pollReplicatePrediction(prediction.id, replicateToken);
-        const resultImageUrl = Array.isArray(output) ? output[0] : output;
-        if (!resultImageUrl) throw new Error('FLUX model returned no image URL');
-
-        const imageResponse = await fetch(resultImageUrl);
-        const arrayBuffer = await imageResponse.arrayBuffer();
-        const base64Image = Buffer.from(arrayBuffer).toString('base64');
-
-        return res.json({
-          success: true,
-          image: `data:image/png;base64,${base64Image}`,
-          isMock: false,
-          promptUsed: finalPromptForFlux
-        });
-      } catch (error) {
-        console.error('[OPENAI AI - REPLICATE FALLBACK ERROR]', error);
-        return res.status(500).json({ 
-          error: 'Replicate 대체 채널을 통한 OpenAI 파이프라인 생성 중 오류가 발생했습니다.', 
-          details: error.message 
-        });
-      }
+      return res.json({
+        success: true,
+        image: `data:image/png;base64,${base64Image}`,
+        isMock: false,
+        promptUsed: finalPromptForFlux
+      });
+    } catch (error) {
+      console.error('[REPLICATE GPT-4o PIPELINE ERROR]', error);
+      return res.status(500).json({ 
+        error: 'Replicate GPT-4o 파이프라인 생성 중 오류가 발생했습니다.', 
+        details: error.message 
+      });
     }
   }
 
@@ -658,137 +608,46 @@ app.post('/api/generate', async (req, res) => {
   // Google Gemini API Mode (Imagen 4 + Gemini 2.5 Flash Pipeline)
   // -------------------------------------------------------------
   if (targetModel === 'gemini_imagen') {
-    if (hasGemini) {
-      try {
-        console.log(`[GEMINI AI] Running 2-stage caricature pipeline. Style: ${selectedStyle}, Gender: ${selectedGender}`);
-        const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+    try {
+      console.log(`[REPLICATE GEMINI PIPELINE] Running Replicate Gemini + FLUX. Style: ${selectedStyle}, Gender: ${selectedGender}`);
+      const faceDescription = await analyzeImageWithReplicateGemini(image, selectedGender, replicateToken);
+      console.log(`[REPLICATE GEMINI PIPELINE] Face Analysis: ${faceDescription}`);
 
-        // Stage 1: Analyze captured image using Gemini 2.5 Flash
-        const analyzeResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: `Analyze the person in this image. Write a detailed description of their facial features, expression, hair color/style, clothing, and general age. Note that the person's gender is ${selectedGender === 'female' ? 'female' : 'male'}. Output ONLY the description in a single paragraph, optimized as an image generation prompt. Do not write any intro or formatting blocks.`
-                    },
-                    {
-                      inlineData: {
-                        mimeType: 'image/jpeg',
-                        data: base64Data
-                      }
-                    }
-                  ]
-                }
-              ]
-            })
-          }
-        );
+      const finalPromptForFlux = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
+      console.log(`[REPLICATE GEMINI PIPELINE] Sending prompt to FLUX: ${finalPromptForFlux}`);
 
-        if (!analyzeResponse.ok) {
-          const errText = await analyzeResponse.text();
-          throw new Error(`Gemini face analysis failed: ${errText}`);
-        }
+      const prediction = await createPredictionWithRetry(
+        'black-forest-labs/flux-kontext-pro',
+        {
+          input_image: image,
+          prompt: finalPromptForFlux,
+          aspect_ratio: 'match_input_image',
+          output_format: 'png',
+          safety_tolerance: 2,
+          prompt_upsampling: false
+        },
+        replicateToken
+      );
+      const output = await pollReplicatePrediction(prediction.id, replicateToken);
+      const resultImageUrl = Array.isArray(output) ? output[0] : output;
+      if (!resultImageUrl) throw new Error('FLUX model returned no image URL');
 
-        const analyzeResult = await analyzeResponse.json();
-        const faceDescription = analyzeResult.candidates?.[0]?.content?.parts?.[0]?.text || 'A person';
-        console.log(`[GEMINI AI] Face Analysis: ${faceDescription}`);
+      const imageResponse = await fetch(resultImageUrl);
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
-        // Stage 2: Pass description to Imagen 4 to paint the caricature
-        const finalPromptForGemini = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-        console.log(`[GEMINI AI] Sending prompt to Imagen 4: ${finalPromptForGemini}`);
-
-        const imagenResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              instances: [
-                {
-                  prompt: finalPromptForGemini
-                }
-              ],
-              parameters: {
-                sampleCount: 1,
-                aspectRatio: '1:1'
-              }
-            })
-          }
-        );
-
-        if (!imagenResponse.ok) {
-          const errText = await imagenResponse.ok ? '' : await imagenResponse.text();
-          throw new Error(`Gemini Imagen 4 failed: ${errText}`);
-        }
-
-        const imagenResult = await imagenResponse.json();
-        const imageBytes = imagenResult.predictions?.[0]?.bytesBase64Encoded;
-        if (!imageBytes) {
-          throw new Error('Imagen 4 returned no image data.');
-        }
-
-        return res.json({
-          success: true,
-          image: `data:image/jpeg;base64,${imageBytes}`,
-          isMock: false,
-          promptUsed: finalPromptForGemini
-        });
-
-      } catch (error) {
-        console.error('[GEMINI AI ERROR]', error);
-        return res.status(500).json({ 
-          error: 'Gemini 이미지 생성 중 오류가 발생했습니다.', 
-          details: error.message 
-        });
-      }
-    } else {
-      // Replicate Fallback (Llama 3.2 Vision VLM + Replicate FLUX)
-      try {
-        console.log(`[GEMINI AI - REPLICATE FALLBACK] Running Replicate Fallback for Gemini + Imagen 4`);
-        const faceDescription = await analyzeImageWithReplicateVLM(image, selectedGender, replicateToken);
-        console.log(`[GEMINI AI - REPLICATE FALLBACK] Face Analysis: ${faceDescription}`);
-
-        const finalPromptForFlux = `${stylePrompt}, a caricature of: ${faceDescription}. ${translatedPrompt || ''}`;
-        console.log(`[GEMINI AI - REPLICATE FALLBACK] Sending prompt to FLUX: ${finalPromptForFlux}`);
-
-        const prediction = await createPredictionWithRetry(
-          'black-forest-labs/flux-kontext-pro',
-          {
-            input_image: image,
-            prompt: finalPromptForFlux,
-            aspect_ratio: 'match_input_image',
-            output_format: 'png',
-            safety_tolerance: 2,
-            prompt_upsampling: false
-          },
-          replicateToken
-        );
-        const output = await pollReplicatePrediction(prediction.id, replicateToken);
-        const resultImageUrl = Array.isArray(output) ? output[0] : output;
-        if (!resultImageUrl) throw new Error('FLUX model returned no image URL');
-
-        const imageResponse = await fetch(resultImageUrl);
-        const arrayBuffer = await imageResponse.arrayBuffer();
-        const base64Image = Buffer.from(arrayBuffer).toString('base64');
-
-        return res.json({
-          success: true,
-          image: `data:image/png;base64,${base64Image}`,
-          isMock: false,
-          promptUsed: finalPromptForFlux
-        });
-      } catch (error) {
-        console.error('[GEMINI AI - REPLICATE FALLBACK ERROR]', error);
-        return res.status(500).json({ 
-          error: 'Replicate 대체 채널을 통한 Gemini 파이프라인 생성 중 오류가 발생했습니다.', 
-          details: error.message 
-        });
-      }
+      return res.json({
+        success: true,
+        image: `data:image/png;base64,${base64Image}`,
+        isMock: false,
+        promptUsed: finalPromptForFlux
+      });
+    } catch (error) {
+      console.error('[REPLICATE GEMINI PIPELINE ERROR]', error);
+      return res.status(500).json({ 
+        error: 'Replicate Gemini 파이프라인 생성 중 오류가 발생했습니다.', 
+        details: error.message 
+      });
     }
   }
 
