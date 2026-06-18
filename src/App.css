@@ -1067,3 +1067,204 @@ body {
     overflow-y: auto !important;
   }
 }
+
+/* -------------------------------------------------------------
+   Error Screen Style
+   ------------------------------------------------------------- */
+.error-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1.2fr;
+  gap: 36px;
+  align-items: center;
+  height: 100%;
+}
+
+.error-info-card {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 42, 133, 0.12);
+  padding: 24px;
+  border-radius: 20px;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.8), 0 10px 25px rgba(255, 42, 133, 0.03);
+  height: 390px;
+  overflow: hidden;
+  justify-content: center;
+}
+
+.error-badge-icon {
+  font-size: 2.8rem;
+  margin-bottom: 12px;
+  align-self: flex-start;
+  animation: error-shake 0.8s ease-in-out infinite alternate;
+}
+
+.error-title-text {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.error-desc-text {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.error-meta-grid {
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.8rem;
+}
+
+.error-meta-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.error-meta-row:last-child {
+  margin-bottom: 0;
+}
+
+.error-meta-lbl {
+  color: var(--text-muted);
+}
+
+.error-meta-val {
+  font-weight: 700;
+  color: var(--accent-purple);
+}
+
+.error-details-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.error-details-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 600;
+  padding: 0;
+  outline: none;
+}
+
+.error-details-toggle:hover {
+  color: var(--accent-pink);
+}
+
+.error-details-content {
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #c2410c;
+  max-height: 60px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.error-actions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  justify-content: space-between;
+  height: 390px;
+}
+
+.error-guide-header {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 10px;
+}
+
+.error-guide-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.error-guide-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.error-guide-num {
+  background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.error-guide-txt {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.error-buttons-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-error-retry {
+  height: 52px;
+  font-size: 1.05rem;
+}
+
+.error-buttons-secondary {
+  display: flex;
+  gap: 12px;
+}
+
+/* Animations */
+@keyframes error-shake {
+  0% { transform: rotate(-6deg); }
+  100% { transform: rotate(6deg); }
+}
+
+/* Responsive adjustment for Mobile Error Screen */
+@media (max-width: 850px), (max-aspect-ratio: 1.1/1) {
+  .error-layout {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  
+  .error-info-card {
+    height: auto !important;
+    padding: 20px !important;
+  }
+  
+  .error-actions-panel {
+    height: auto !important;
+    gap: 20px !important;
+  }
+}
+

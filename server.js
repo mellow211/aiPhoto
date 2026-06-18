@@ -545,17 +545,10 @@ app.post('/api/generate', async (req, res) => {
         },
         replicateToken
       );
-      const output = await pollReplicatePrediction(prediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(output) ? output[0] : output;
-      if (!resultImageUrl) throw new Error('GPT Image 2 model returned no image URL');
-
-      const imageResponse = await fetch(resultImageUrl);
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
       return res.json({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
+        predictionId: prediction.id,
         isMock: false,
         promptUsed: finalPromptForGen
       });
@@ -604,28 +597,11 @@ app.post('/api/generate', async (req, res) => {
         inputPayload,
         replicateToken
       );
-      console.log(`[REPLICATE AI] Prediction created with ID: ${prediction.id}. Polling...`);
-
-      const output = await pollReplicatePrediction(prediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(output) ? output[0] : output;
-
-      if (!resultImageUrl) {
-        throw new Error(`Replicate ${modelName} did not return any output image URL.`);
-      }
-
-      console.log(`[REPLICATE AI] Generation succeeded. Downloading image from ${resultImageUrl}...`);
-
-      const imageResponse = await fetch(resultImageUrl);
-      if (!imageResponse.ok) {
-        throw new Error(`Failed to download generated image from Replicate: ${imageResponse.statusText}`);
-      }
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const base64Image = buffer.toString('base64');
+      console.log(`[REPLICATE AI] Prediction created with ID: ${prediction.id}. Returning async job ID...`);
 
       return res.json({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
+        predictionId: prediction.id,
         isMock: false,
         promptUsed: finalPrompt
       });
@@ -661,17 +637,10 @@ app.post('/api/generate', async (req, res) => {
         },
         replicateToken
       );
-      const output = await pollReplicatePrediction(prediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(output) ? output[0] : output;
-      if (!resultImageUrl) throw new Error('Nano Banana 2 model returned no image URL');
-
-      const imageResponse = await fetch(resultImageUrl);
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
       return res.json({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
+        predictionId: prediction.id,
         isMock: false,
         promptUsed: finalPromptForGen
       });
@@ -762,17 +731,10 @@ app.post('/api/generate', async (req, res) => {
           },
           replicateToken
         );
-        const output = await pollReplicatePrediction(prediction.id, replicateToken);
-        const resultImageUrl = Array.isArray(output) ? output[0] : output;
-        if (!resultImageUrl) throw new Error('Replicate SDXL model returned no image URL');
-
-        const imageResponse = await fetch(resultImageUrl);
-        const arrayBuffer = await imageResponse.arrayBuffer();
-        const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
         return res.json({
           success: true,
-          image: `data:image/png;base64,${base64Image}`,
+          predictionId: prediction.id,
           isMock: false,
           promptUsed: finalPrompt
         });
@@ -806,6 +768,81 @@ app.post('/api/generate', async (req, res) => {
   }
 
   return res.status(400).json({ error: `알 수 없는 생성 모델이 선택되었습니다: ${targetModel}` });
+});
+
+// API Route: Check Caricature Status
+app.get('/api/status', async (req, res) => {
+  const { id } = req.query;
+
+  if (!id) {
+    return res.status(400).json({ error: '작업 ID(id)가 필요합니다.' });
+  }
+
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  if (!replicateToken || replicateToken === 'YOUR_REPLICATE_API_TOKEN_HERE') {
+    return res.status(500).json({ error: '서버의 Replicate 토큰 설정이 유효하지 않습니다.' });
+  }
+
+  try {
+    const response = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${replicateToken}`,
+      }
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Replicate API returned status ${response.status}: ${errText}`);
+    }
+
+    const prediction = await response.json();
+    const status = prediction.status;
+
+    console.log(`[LOCAL STATUS] Polling ID: ${id}, Status: ${status}`);
+
+    if (status === 'succeeded') {
+      const resultImageUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+      if (!resultImageUrl) {
+        throw new Error('Replicate에서 성공 응답을 보냈으나 출력 이미지 URL이 비어 있습니다.');
+      }
+
+      console.log(`[LOCAL STATUS] Downloading completed image: ${resultImageUrl}`);
+      const imageResponse = await fetch(resultImageUrl);
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to download image from Replicate: ${imageResponse.statusText}`);
+      }
+
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64Image = buffer.toString('base64');
+
+      return res.json({
+        success: true,
+        status: 'succeeded',
+        image: `data:image/png;base64,${base64Image}`
+      });
+    }
+
+    if (status === 'failed' || status === 'canceled') {
+      return res.json({
+        success: false,
+        status: status,
+        error: prediction.error || 'AI 이미지 생성 작업이 실패했거나 취소되었습니다.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      status: status
+    });
+
+  } catch (error) {
+    console.error(`[LOCAL STATUS ERROR]`, error.message);
+    return res.status(500).json({
+      error: '작업 상태를 확인하는 과정에서 에러가 발생했습니다.',
+      details: error.message
+    });
+  }
 });
 
 // Fallback to serving SPA index.html for undefined routes in production

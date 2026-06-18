@@ -10,11 +10,19 @@ const STYLES = [
   { key: 'sketch', icon: '✏️', nameKo: '연필 스케치 스타일', nameEn: 'Detailed Pencil Sketch' }
 ];
 
-export default function StyleScreen({ capturedImage, onSelectStyle, onBack }) {
-  const [selectedStyle, setSelectedStyle] = useState('default');
-  const [customPrompt, setCustomPrompt] = useState('');
-  const [gender, setGender] = useState('male');
-  const [selectedModel, setSelectedModel] = useState('replicate_flux');
+export default function StyleScreen({ 
+  capturedImage, 
+  onSelectStyle, 
+  onBack,
+  initialStyle = 'default',
+  initialPrompt = '',
+  initialGender = 'male',
+  initialModel = 'replicate_flux'
+}) {
+  const [selectedStyle, setSelectedStyle] = useState(initialStyle);
+  const [customPrompt, setCustomPrompt] = useState(initialPrompt);
+  const [gender, setGender] = useState(initialGender);
+  const [selectedModel, setSelectedModel] = useState(initialModel);
 
   const carouselRef = useRef(null);
   const [isMouseDown, setIsMouseDown] = useState(false);

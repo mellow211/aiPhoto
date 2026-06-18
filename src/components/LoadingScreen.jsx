@@ -8,7 +8,7 @@ const LOADING_STATUSES = [
   '종이 질감 및 외곽선 선 정리 등 최종 캔버스 마감 중...'
 ];
 
-export default function LoadingScreen() {
+export default function LoadingScreen({ status }) {
   const [statusIndex, setStatusIndex] = useState(0);
 
   useEffect(() => {
@@ -26,7 +26,9 @@ export default function LoadingScreen() {
         <div className="loading-brush">🖌️</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <h2 className="loading-status-title">캐리커처 그리는 중...</h2>
+        <h2 className="loading-status-title">
+          {status === 'starting' ? 'AI 서버 대기 중...' : '캐리커처 그리는 중...'}
+        </h2>
         <p className="loading-status-text">{LOADING_STATUSES[statusIndex]}</p>
       </div>
     </div>

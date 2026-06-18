@@ -528,17 +528,10 @@ export default async function handler(req, res) {
         },
         replicateToken
       );
-      const output = await pollReplicatePrediction(prediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(output) ? output[0] : output;
-      if (!resultImageUrl) throw new Error('GPT Image 2 model returned no image URL');
-
-      const imageResponse = await fetch(resultImageUrl);
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
       return res.status(200).json({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
+        predictionId: prediction.id,
         isMock: false,
         promptUsed: finalPromptForGen
       });
@@ -587,28 +580,11 @@ export default async function handler(req, res) {
         inputPayload,
         replicateToken
       );
-      console.log(`[VERCEL REPLICATE] Prediction created with ID: ${prediction.id}. Polling...`);
-
-      const output = await pollReplicatePrediction(prediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(output) ? output[0] : output;
-
-      if (!resultImageUrl) {
-        throw new Error(`Replicate ${modelName} did not return any output image URL.`);
-      }
-
-      console.log(`[VERCEL REPLICATE] Generation succeeded. Downloading image from ${resultImageUrl}...`);
-
-      const imageResponse = await fetch(resultImageUrl);
-      if (!imageResponse.ok) {
-        throw new Error(`Failed to download generated image from Replicate: ${imageResponse.statusText}`);
-      }
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const base64Image = buffer.toString('base64');
+      console.log(`[VERCEL REPLICATE] Prediction created with ID: ${prediction.id}. Returning async job ID...`);
 
       return res.status(200).json({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
+        predictionId: prediction.id,
         isMock: false,
         promptUsed: finalPrompt
       });
@@ -644,17 +620,10 @@ export default async function handler(req, res) {
         },
         replicateToken
       );
-      const output = await pollReplicatePrediction(prediction.id, replicateToken);
-      const resultImageUrl = Array.isArray(output) ? output[0] : output;
-      if (!resultImageUrl) throw new Error('Nano Banana 2 model returned no image URL');
-
-      const imageResponse = await fetch(resultImageUrl);
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
       return res.status(200).json({
         success: true,
-        image: `data:image/png;base64,${base64Image}`,
+        predictionId: prediction.id,
         isMock: false,
         promptUsed: finalPromptForGen
       });
@@ -727,7 +696,6 @@ export default async function handler(req, res) {
         });
       }
     } else {
-      // Replicate Fallback (Replicate 상의 stability-ai/sdxl 이미지 변환)
       try {
         console.log(`[STABILITY AI - VERCEL REPLICATE FALLBACK] Running Replicate Fallback for Stability SDXL`);
         
@@ -745,17 +713,10 @@ export default async function handler(req, res) {
           },
           replicateToken
         );
-        const output = await pollReplicatePrediction(prediction.id, replicateToken);
-        const resultImageUrl = Array.isArray(output) ? output[0] : output;
-        if (!resultImageUrl) throw new Error('Replicate SDXL model returned no image URL');
-
-        const imageResponse = await fetch(resultImageUrl);
-        const arrayBuffer = await imageResponse.arrayBuffer();
-        const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
         return res.status(200).json({
           success: true,
-          image: `data:image/png;base64,${base64Image}`,
+          predictionId: prediction.id,
           isMock: false,
           promptUsed: finalPrompt
         });

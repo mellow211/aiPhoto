@@ -12,6 +12,10 @@
       "destination": "/api/generate.js"
     },
     {
+      "source": "/api/status",
+      "destination": "/api/status.js"
+    },
+    {
       "source": "/(.*)",
       "destination": "/"
     }
