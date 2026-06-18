@@ -365,6 +365,7 @@ body {
   gap: 10px;
   height: 420px;
   overflow: hidden;
+  min-width: 0;
 }
 
 .style-carousel-container {
@@ -374,6 +375,7 @@ body {
   width: 100%;
   position: relative;
   flex: 1;
+  min-width: 0;
 }
 
 .carousel-nav-btn {
@@ -413,6 +415,7 @@ body {
   width: 100%;
   padding: 4px;
   cursor: grab;
+  min-width: 0;
   /* Hide scrollbar */
   -ms-overflow-style: none; /* IE, Edge */
   scrollbar-width: none; /* Firefox */
@@ -553,6 +556,9 @@ body {
   height: 42px;
   outline: none;
   transition: all 0.2s ease;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .prompt-textarea:focus {
