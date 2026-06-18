@@ -297,18 +297,49 @@ async function analyzeImageWithReplicateGemini(image, gender, replicateToken) {
 async function pollReplicatePrediction(predictionId, replicateToken, maxSeconds = 120) {
   let status = 'starting';
   let output = null;
-  let attempts = 0;
-  const maxAttempts = Math.ceil(maxSeconds / 1.2);
+  
+  const startTime = Date.now();
+  let delay = 2000; // Start with 2 seconds
 
-  while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled' && attempts < maxAttempts) {
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    attempts++;
+  while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled') {
+    const elapsedSeconds = (Date.now() - startTime) / 1000;
+    if (elapsedSeconds >= maxSeconds) {
+      // Attempt to cancel the remote task if it's still running/queued to save credits
+      await cancelReplicatePrediction(predictionId, replicateToken);
+      throw new Error(`Replicate prediction timed out after ${maxSeconds} seconds.`);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, delay));
+    // Increase delay progressively up to 8 seconds
+    delay = Math.min(delay + 1500, 8000);
 
     const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
       headers: {
         'Authorization': `Bearer ${replicateToken}`,
       }
     });
+
+    if (pollResponse.status === 429) {
+      const errBodyText = await pollResponse.text();
+      let retryAfter = 3; // default fallback wait
+      try {
+        const errJson = JSON.parse(errBodyText);
+        if (errJson.retry_after) {
+          retryAfter = parseFloat(errJson.retry_after) + 0.5;
+        }
+      } catch (e) {}
+
+      const headerRetryAfter = pollResponse.headers.get('retry-after');
+      if (headerRetryAfter) {
+        retryAfter = parseFloat(headerRetryAfter) + 0.5;
+      }
+
+      console.warn(`[REPLICATE POLL] Rate limited (429). Retrying poll after ${retryAfter}s...`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      // Reset delay to initial value since we just waited
+      delay = 2000;
+      continue;
+    }
 
     if (!pollResponse.ok) {
       const errText = await pollResponse.text();
@@ -322,12 +353,6 @@ async function pollReplicatePrediction(predictionId, replicateToken, maxSeconds 
     if (status === 'failed' || status === 'canceled') {
       throw new Error(`Replicate prediction ended with status: ${status}. Error: ${pollData.error || 'Unknown error'}`);
     }
-  }
-
-  if (status !== 'succeeded') {
-    // Attempt to cancel the remote task if it's still running/queued to save credits
-    await cancelReplicatePrediction(predictionId, replicateToken);
-    throw new Error(`Replicate prediction timed out after ${maxSeconds} seconds.`);
   }
 
   return output;
