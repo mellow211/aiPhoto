@@ -194,6 +194,25 @@ async function expandUserPrompt(promptText) {
   }
 }
 
+// Cancel helper for Replicate predictions to prevent wasting credits on timed out calls
+async function cancelReplicatePrediction(predictionId, replicateToken) {
+  try {
+    const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${replicateToken}`,
+      }
+    });
+    if (response.ok) {
+      console.log(`[REPLICATE] Canceled prediction successfully: ${predictionId}`);
+    } else {
+      console.warn(`[REPLICATE] Failed to cancel prediction ${predictionId}: status ${response.status}`);
+    }
+  } catch (err) {
+    console.warn(`[REPLICATE] Error canceling prediction ${predictionId}:`, err.message);
+  }
+}
+
 // Analyze image utilizing Replicate VLM models as fallback for GPT-4o vision or Gemini Flash
 async function analyzeImageWithReplicateVLM(image, gender, replicateToken) {
   try {
@@ -209,22 +228,23 @@ async function analyzeImageWithReplicateVLM(image, gender, replicateToken) {
       },
       replicateToken
     );
-    const output = await pollReplicatePrediction(prediction.id, replicateToken);
+    // Limit face description vision model polling to 12 seconds to prevent Vercel 60s timeout
+    const output = await pollReplicatePrediction(prediction.id, replicateToken, 12);
     const resultText = Array.isArray(output) ? output.join('') : output;
     if (!resultText) throw new Error('Replicate VLM returned empty description');
     return resultText.trim();
   } catch (error) {
-    console.error(`[REPLICATE VLM] LLaVA analysis failed:`, error.message);
+    console.error(`[REPLICATE VLM] LLaVA analysis failed or timed out:`, error.message);
     return `A portrait of a ${gender === 'female' ? 'female' : 'male'} user with friendly expression`;
   }
 }
 
-// Polling helper for Replicate predictions
-async function pollReplicatePrediction(predictionId, replicateToken) {
+// Polling helper for Replicate predictions with customizable timeout limit (in seconds)
+async function pollReplicatePrediction(predictionId, replicateToken, maxSeconds = 120) {
   let status = 'starting';
   let output = null;
   let attempts = 0;
-  const maxAttempts = 120; // Up to 144 seconds wait time
+  const maxAttempts = Math.ceil(maxSeconds / 1.2);
 
   while (status !== 'succeeded' && status !== 'failed' && status !== 'canceled' && attempts < maxAttempts) {
     await new Promise(resolve => setTimeout(resolve, 1200));
@@ -251,7 +271,9 @@ async function pollReplicatePrediction(predictionId, replicateToken) {
   }
 
   if (status !== 'succeeded') {
-    throw new Error('Replicate prediction timed out.');
+    // Attempt to cancel the remote task if it's still running/queued to save credits
+    await cancelReplicatePrediction(predictionId, replicateToken);
+    throw new Error(`Replicate prediction timed out after ${maxSeconds} seconds.`);
   }
 
   return output;
